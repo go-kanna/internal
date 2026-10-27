@@ -2,6 +2,7 @@ package packages_test
 
 import (
 	"fmt"
+	"go/types"
 	"os"
 	"path/filepath"
 	"slices"
@@ -206,6 +207,57 @@ func TestLoad_TypesInfo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoad_Deps(t *testing.T) {
+	t.Parallel()
+
+	// a imports b alone, whose API refers to c.T; c also declares NewT.
+	dir := module(t, map[string]string{
+		"a/a.go": "package a\n\nimport \"example.com/m/b\"\n\nvar _ = b.F\n",
+		"b/b.go": "package b\n\nimport \"example.com/m/c\"\n\nfunc F(c.T) {}\n",
+		"c/c.go": "package c\n\ntype T struct{}\n\nfunc NewT() T { return T{} }\n",
+	})
+
+	tests := []struct {
+		name string
+		deps bool
+		want []string
+	}{
+		// From the export data of b, c is only what b refers to.
+		{name: "from export data", want: []string{"T"}},
+		{name: "from source", deps: true, want: []string{"NewT", "T"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			set := load(t, []string{"./a"}, packages.Config{Dir: dir, Deps: tt.deps})
+			if len(set.Diags) > 0 {
+				t.Fatalf("Diags = %v", set.Diags)
+			}
+			c := imported(imported(set.Packages[0].Types, "example.com/m/b"), "example.com/m/c")
+			if c == nil {
+				t.Fatal("c is not among what b imports")
+			}
+			if got := c.Scope().Names(); !slices.Equal(got, tt.want) {
+				t.Errorf("c declares %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// imported returns what pkg imports from path, or nil.
+func imported(pkg *types.Package, path string) *types.Package {
+	if pkg == nil {
+		return nil
+	}
+	for _, imp := range pkg.Imports() {
+		if imp.Path() == path {
+			return imp
+		}
+	}
+	return nil
 }
 
 // uses lists what each use of name in pkg refers to, which needs TypesInfo.

@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -48,6 +49,21 @@ var _, _, _ = yaml.Marshal, errors.New, log2.Print
 `
 	if string(got) != want {
 		t.Errorf("Bytes():\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestFile_ModuleImports(t *testing.T) {
+	t.Parallel()
+
+	f := newFile()
+	for _, p := range []string{"gopkg.in/yaml.v3", "errors", "example.com/app/model", "net/http", "example.com/app/user"} {
+		f.Import(p, "x")
+	}
+
+	// The file's own package is never imported, and the standard library needs
+	// no module.
+	if got, want := f.ModuleImports(), []string{"example.com/app/model", "gopkg.in/yaml.v3"}; !slices.Equal(got, want) {
+		t.Errorf("ModuleImports() = %q, want %q", got, want)
 	}
 }
 

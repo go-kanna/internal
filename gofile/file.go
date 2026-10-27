@@ -76,6 +76,20 @@ func (f *File) Bytes() ([]byte, error) {
 	return src, nil
 }
 
+// ModuleImports returns, sorted, the paths the file imports from modules, which
+// is every one outside the standard library: what the go.mod of the package it
+// goes into has to provide.
+func (f *File) ModuleImports() []string {
+	var paths []string
+	for p := range f.imports {
+		if !standard(p) {
+			paths = append(paths, p)
+		}
+	}
+	slices.Sort(paths)
+	return paths
+}
+
 // writeImports writes the import block, with the standard library above the
 // rest. The local name is left out only when it is the name the package
 // declares and the import path ends in that name, so that a reader never has to
@@ -103,12 +117,17 @@ func (f *File) writeImports(b *bytes.Buffer) {
 	b.WriteString(")\n\n")
 }
 
-// group puts the standard library, whose import paths have no dot in their
-// first element, before everything else.
+// group puts the standard library before everything else.
 func group(importPath string) int {
-	first, _, _ := strings.Cut(importPath, "/")
-	if strings.Contains(first, ".") {
-		return 1
+	if standard(importPath) {
+		return 0
 	}
-	return 0
+	return 1
+}
+
+// standard reports whether importPath is in the standard library, whose paths
+// have no dot in their first element.
+func standard(importPath string) bool {
+	first, _, _ := strings.Cut(importPath, "/")
+	return !strings.Contains(first, ".")
 }

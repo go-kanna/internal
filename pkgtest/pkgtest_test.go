@@ -29,6 +29,18 @@ func TestLoad(t *testing.T) {
 	if pkg.Types.Scope().Lookup("B") == nil {
 		t.Error("B is not in the package scope")
 	}
+	if pkg.TypesInfo == nil {
+		t.Fatal("TypesInfo = nil, want what the syntax refers to")
+	}
+	var fromTime []string
+	for id, obj := range pkg.TypesInfo.Uses {
+		if obj.Pkg() != nil && obj.Pkg().Path() == "time" {
+			fromTime = append(fromTime, id.Name)
+		}
+	}
+	if want := []string{"Time"}; !slices.Equal(fromTime, want) {
+		t.Errorf("uses of package time = %q, want %q", fromTime, want)
+	}
 }
 
 func TestLoad_ListsTheSourceOfATypeError(t *testing.T) {

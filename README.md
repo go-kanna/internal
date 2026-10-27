@@ -16,6 +16,7 @@ and a minor release may break the one before it.
 - [`directive`](./directive): finds the `//kanna:<key>` comments that mark a declaration for a generator.
 - [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, and reports
   what went wrong as diagnostics.
+- [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
 
 ## Development

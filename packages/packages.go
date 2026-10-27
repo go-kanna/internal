@@ -32,6 +32,13 @@ type Config struct {
 	// variant, which declares everything the package does plus its _test.go
 	// files, and an external test package comes back as a package of its own.
 	Tests bool
+
+	// Regenerated names the files the caller is about to write again in the
+	// packages it loads, such as "validate_gen.go". What they hold is about to
+	// be replaced, so one that no longer type-checks is set aside for the load;
+	// see Load. Only a generated file is ever set aside: a hand-written file of
+	// the same name is not the caller's to replace.
+	Regenerated []string
 }
 
 // Set is the packages one Load found, together with what went wrong loading
@@ -47,6 +54,11 @@ type Set struct {
 	// import. A package with errors is still in Packages; whether to go on is
 	// the caller's decision.
 	Diags []diag.Diag
+
+	// SetAside lists, by absolute path, the regenerated files whose
+	// declarations had to be dropped for the packages to load. Code calling into one fails until it
+	// is regenerated, which the caller may want to point out alongside Diags.
+	SetAside []string
 }
 
 // mode is what a generator reads. NeedDeps is left out on purpose: without it
@@ -64,14 +76,33 @@ const mode = packages.NeedName |
 // always does; no patterns means the package in Dir. The error reports that the
 // go command could not be run at all. Anything wrong with the packages
 // themselves is in Set.Diags.
+//
+// A change to a declaration can leave the output an earlier run generated from
+// it referring to what is gone, and a package that does not type-check cannot be
+// read to generate that output again. So when an error points into one of the
+// files in cfg.Regenerated, it is set aside for the load, without touching the
+// disk, in two steps: first only its function bodies are replaced, which is
+// where stale output almost always breaks and which keeps hand-written callers
+// compiling; if errors still point into it, the whole file is emptied. Errors
+// anywhere else never set anything aside, so a real mistake is reported as it
+// is.
 func Load(patterns []string, cfg Config) (Set, error) {
+	set, err := load(patterns, cfg, nil)
+	if err != nil || len(cfg.Regenerated) == 0 {
+		return set, err
+	}
+	return setAside(patterns, cfg, set)
+}
+
+// load is a single Load, with overlay standing in for the named files.
+func load(patterns []string, cfg Config, overlay map[string][]byte) (Set, error) {
 	dir, err := filepath.Abs(cfg.Dir)
 	if err != nil {
 		return Set{}, fmt.Errorf("load packages: %w", err)
 	}
 
 	fset := token.NewFileSet()
-	pc := &packages.Config{Mode: mode, Dir: dir, Fset: fset, Tests: cfg.Tests}
+	pc := &packages.Config{Mode: mode, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: overlay}
 	if cfg.Tags != "" {
 		pc.BuildFlags = []string{"-tags=" + cfg.Tags}
 	}

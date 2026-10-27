@@ -13,7 +13,8 @@ and a minor release may break the one before it.
 ## Packages
 
 - [`diag`](./diag): the problems a generator reports, each tied to a source position.
-- [`packages`](./packages): loads the packages a generator reads, reporting load errors as go build does.
+- [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, and reports
+  what went wrong as diagnostics.
 
 ## Development
 

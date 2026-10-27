@@ -10,6 +10,10 @@ Go applies the internal rule by import path, so these packages can be imported b
 `github.com/go-kanna/` and by nothing else. Nothing here is a public API: versions track whatever the generators need,
 and a minor release may break the one before it.
 
+## Packages
+
+- [`diag`](./diag): the problems a generator reports, each tied to a source position.
+
 ## Development
 
 ```sh

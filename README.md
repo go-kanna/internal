@@ -17,6 +17,7 @@ and a minor release may break the one before it.
 - [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, and reports
   what went wrong as diagnostics.
 - [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk.
+- [`scan`](./scan): reads the struct types a package declares.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
 
 ## Development

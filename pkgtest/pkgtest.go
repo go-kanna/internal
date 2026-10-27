@@ -18,10 +18,10 @@ import (
 )
 
 // Load type-checks files as one package and returns it the way packages.Load
-// would, with its name, syntax, and types. Its package clause names it, and the
-// name doubles as its import path. Files are parsed in name order, so that
-// positions come out the same from run to run. Anything that does not
-// type-check fails the test.
+// would, with its name, syntax, types, and the TypesInfo that Config.TypesInfo
+// asks for. Its package clause names it, and the name doubles as its import
+// path. Files are parsed in name order, so that positions come out the same
+// from run to run. Anything that does not type-check fails the test.
 func Load(t testing.TB, files map[string]string) *packages.Package {
 	t.Helper()
 
@@ -40,7 +40,17 @@ func Load(t testing.TB, files map[string]string) *packages.Package {
 	}
 
 	name := syntax[0].Name.Name
-	pkg, err := (&types.Config{Importer: importer.Default()}).Check(name, fset, syntax, nil)
+	info := &types.Info{
+		Types:        make(map[ast.Expr]types.TypeAndValue),
+		Defs:         make(map[*ast.Ident]types.Object),
+		Uses:         make(map[*ast.Ident]types.Object),
+		Implicits:    make(map[ast.Node]types.Object),
+		Instances:    make(map[*ast.Ident]types.Instance),
+		Scopes:       make(map[ast.Node]*types.Scope),
+		Selections:   make(map[*ast.SelectorExpr]*types.Selection),
+		FileVersions: make(map[*ast.File]string),
+	}
+	pkg, err := (&types.Config{Importer: importer.Default()}).Check(name, fset, syntax, info)
 	if err != nil {
 		t.Fatalf("type-check %s: %v\n%s", name, err, listing(names, files))
 	}
@@ -54,6 +64,7 @@ func Load(t testing.TB, files map[string]string) *packages.Package {
 		Fset:            fset,
 		Syntax:          syntax,
 		Types:           pkg,
+		TypesInfo:       info,
 	}
 }
 

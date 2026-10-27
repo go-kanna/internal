@@ -33,6 +33,12 @@ type Config struct {
 	// files, and an external test package comes back as a package of its own.
 	Tests bool
 
+	// TypesInfo records in Package.TypesInfo what the identifiers and
+	// expressions of the syntax denote, for a generator that reads an
+	// expression, such as a function named in a list, and not only
+	// declarations. It covers the packages matched, not what they import.
+	TypesInfo bool
+
 	// Regenerated names the files the caller is about to write again in the
 	// packages it loads, such as "validate_gen.go". What they hold is about to
 	// be replaced, so one that no longer type-checks is set aside for the load;
@@ -101,8 +107,12 @@ func load(patterns []string, cfg Config, overlay map[string][]byte) (Set, error)
 		return Set{}, fmt.Errorf("load packages: %w", err)
 	}
 
+	m := mode
+	if cfg.TypesInfo {
+		m |= packages.NeedTypesInfo
+	}
 	fset := token.NewFileSet()
-	pc := &packages.Config{Mode: mode, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: overlay}
+	pc := &packages.Config{Mode: m, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: overlay}
 	if cfg.Tags != "" {
 		pc.BuildFlags = []string{"-tags=" + cfg.Tags}
 	}

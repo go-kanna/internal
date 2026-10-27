@@ -3,7 +3,8 @@
 // It applies no filter beyond skipping generated files, because the generators
 // disagree on what matters: some take the structs a directive marks, others
 // every struct in a package but those excluded. A filter here would bend the
-// model toward one of them.
+// model toward one of them. Even generated files are read for a generator that
+// asks, by AllStructs.
 package scan
 
 import (
@@ -60,10 +61,22 @@ type Field struct {
 // generated-code marker is skipped, so that a generator never reads its own
 // output, and so is a type alias, which names a type declared elsewhere.
 func Structs(pkgs []*packages.Package) []Struct {
+	return structs(pkgs, false)
+}
+
+// AllStructs is Structs reading generated files too, for a generator that
+// writes into a package other than the one it reads, and so never meets its own
+// output there. Its input may well be generated itself, such as the models sqlc
+// writes.
+func AllStructs(pkgs []*packages.Package) []Struct {
+	return structs(pkgs, true)
+}
+
+func structs(pkgs []*packages.Package, generated bool) []Struct {
 	var structs []Struct
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Syntax {
-			if ast.IsGenerated(file) {
+			if !generated && ast.IsGenerated(file) {
 				continue
 			}
 			for _, decl := range file.Decls {

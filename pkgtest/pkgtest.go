@@ -3,6 +3,7 @@
 package pkgtest
 
 import (
+	"fmt"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -10,6 +11,7 @@ import (
 	"go/types"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/go-kanna/internal/packages"
@@ -40,7 +42,7 @@ func Load(t testing.TB, files map[string]string) *packages.Package {
 	name := syntax[0].Name.Name
 	pkg, err := (&types.Config{Importer: importer.Default()}).Check(name, fset, syntax, nil)
 	if err != nil {
-		t.Fatalf("type-check %s: %v", name, err)
+		t.Fatalf("type-check %s: %v\n%s", name, err, listing(names, files))
 	}
 
 	return &packages.Package{
@@ -53,4 +55,17 @@ func Load(t testing.TB, files map[string]string) *packages.Package {
 		Syntax:          syntax,
 		Types:           pkg,
 	}
+}
+
+// listing numbers the lines of each file, so that a type error in generated
+// source can be found from its position.
+func listing(names []string, files map[string]string) string {
+	var b strings.Builder
+	for _, name := range names {
+		fmt.Fprintf(&b, "--- %s\n", name)
+		for i, line := range strings.Split(strings.TrimSuffix(files[name], "\n"), "\n") {
+			fmt.Fprintf(&b, "%4d  %s\n", i+1, line)
+		}
+	}
+	return b.String()
 }

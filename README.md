@@ -20,7 +20,8 @@ and a minor release may break the one before it.
   reads what the destination already declares and requires.
 - [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, and reports
   what went wrong as diagnostics.
-- [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk.
+- [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk, and compares what a
+  generator generates with golden files.
 - [`scan`](./scan): reads the struct types a package declares.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
 

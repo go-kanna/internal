@@ -2,6 +2,7 @@ package pkgtest_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/go-kanna/internal/pkgtest"
@@ -27,5 +28,18 @@ func TestLoad(t *testing.T) {
 	}
 	if pkg.Types.Scope().Lookup("B") == nil {
 		t.Error("B is not in the package scope")
+	}
+}
+
+func TestLoad_ListsTheSourceOfATypeError(t *testing.T) {
+	t.Parallel()
+
+	r := &recorder{TB: t}
+	pkgtest.Load(r, map[string]string{"p_gen.go": "package p\n\nvar x int = \"s\"\n"})
+
+	// The position in the error leads to the numbered line.
+	if !r.fatal || len(r.failures) != 1 ||
+		!strings.Contains(r.failures[0], "p_gen.go:3:") || !strings.Contains(r.failures[0], "   3  var x int = \"s\"") {
+		t.Errorf("Load() failures = %q, want the error with p_gen.go listed", r.failures)
 	}
 }

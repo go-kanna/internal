@@ -39,6 +39,13 @@ type Config struct {
 	// declarations. It covers the packages matched, not what they import.
 	TypesInfo bool
 
+	// Deps reads what the packages import from source as well, rather than
+	// from export data. Export data holds of a package only what its own API
+	// needs of the packages it imports, so a package the ones matched reach
+	// only through another comes without its functions, which a generator
+	// looking for constructors there needs. It about doubles the load time.
+	Deps bool
+
 	// Regenerated names the files the caller is about to write again in the
 	// packages it loads, such as "validate_gen.go". What they hold is about to
 	// be replaced, so one that no longer type-checks is set aside for the load;
@@ -67,10 +74,10 @@ type Set struct {
 	SetAside []string
 }
 
-// mode is what a generator reads. NeedDeps is left out on purpose: without it
-// the types of dependencies come from export data, while with it every
-// dependency is parsed and type-checked from source, which more than doubles
-// the load time.
+// mode is what a generator reads. NeedDeps is left out unless Config.Deps asks
+// for it: without it the types of dependencies come from export data, while
+// with it every dependency is parsed and type-checked from source, which more
+// than doubles the load time.
 const mode = packages.NeedName |
 	packages.NeedFiles |
 	packages.NeedCompiledGoFiles |
@@ -110,6 +117,9 @@ func load(patterns []string, cfg Config, overlay map[string][]byte) (Set, error)
 	m := mode
 	if cfg.TypesInfo {
 		m |= packages.NeedTypesInfo
+	}
+	if cfg.Deps {
+		m |= packages.NeedDeps
 	}
 	fset := token.NewFileSet()
 	pc := &packages.Config{Mode: m, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: overlay}

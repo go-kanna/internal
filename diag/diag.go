@@ -84,15 +84,16 @@ func HasErrors(ds []Diag) bool {
 // an absolute path; an empty dir leaves every path as it is.
 func Write(w io.Writer, dir string, ds []Diag) {
 	for _, d := range ds {
-		d.Pos.Filename = shorten(dir, d.Pos.Filename)
+		d.Pos.Filename = ShortPath(dir, d.Pos.Filename)
 		fmt.Fprintln(w, d)
 	}
 }
 
-// shorten follows the go command: the path relative to dir replaces the
-// absolute one whenever it is shorter, even when it climbs out of dir, and a
-// file directly inside dir is written as ./name.
-func shorten(dir, path string) string {
+// ShortPath names path as the go command does when it runs in dir: the path
+// relative to dir replaces the absolute one whenever it is shorter, even when it
+// climbs out of dir, and a file directly inside dir is written as ./name. An
+// empty dir, or a path that is not absolute, leaves path as it is.
+func ShortPath(dir, path string) string {
 	if dir == "" || !filepath.IsAbs(path) {
 		return path
 	}

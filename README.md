@@ -15,6 +15,7 @@ and a minor release may break the one before it.
 - [`diag`](./diag): the problems a generator reports, each tied to a source position.
 - [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, and reports
   what went wrong as diagnostics.
+- [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
 
 ## Development
 

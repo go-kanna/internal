@@ -1,9 +1,11 @@
 package packages
 
 import (
+	"cmp"
 	"go/token"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -25,31 +27,52 @@ func diagnose(roots []*Package, dir string) []diag.Diag {
 	return ds
 }
 
-// diagnosePackage reports the errors recorded on p.
+// diagnosePackage reports the errors recorded on p, sorted by position.
 //
 // When the go command compiled p, the compiler's output comes back as a single
-// error holding every message at once. p is also parsed and type-checked from
-// source, which reports most of those messages a second time. The compiler's
-// account is the one kept: it is what go build prints, its syntax errors read
-// better than go/parser's cascade, and for a dependency it is the only account
-// there is.
+// error holding every message at once, and p parsed and type-checked from
+// source reports the same problems again. The account from source is kept
+// whenever there is one, because it names files as they were read: the
+// compiler names the temporary copy the go command makes of an overlaid file.
+// The compiler's output stands only for a package not read from source, a
+// dependency, for which it is the only account there is.
+//
+// go/packages asks go/parser for every error, so one syntax error comes with
+// the cascade that follows it on the same line. Only the first error of a line
+// is kept, which is what go/parser does when not asked for all of them.
 func diagnosePackage(p *Package, dir string) []diag.Diag {
-	var compiled, listed, source []diag.Diag
+	var listed, compiled, source []diag.Diag
+	parsed := make(map[token.Position]bool)
 	for _, e := range p.Errors {
+		pos := position(e.Pos)
 		switch {
 		case e.Kind == packages.ListError && strings.HasPrefix(e.Msg, "# "):
 			compiled = append(compiled, compilerDiags(e.Msg, dir)...)
-		case e.Kind == packages.ParseError || e.Kind == packages.TypeError:
-			source = append(source, diag.Errorf(position(e.Pos), "%s", e.Msg))
+		case e.Kind == packages.ParseError:
+			line := token.Position{Filename: pos.Filename, Line: pos.Line}
+			if !parsed[line] {
+				parsed[line] = true
+				source = append(source, diag.Errorf(pos, "%s", e.Msg))
+			}
+		case e.Kind == packages.TypeError:
+			source = append(source, diag.Errorf(pos, "%s", e.Msg))
 		default:
-			listed = append(listed, diag.Errorf(position(e.Pos), "%s", e.Msg))
+			listed = append(listed, diag.Errorf(pos, "%s", e.Msg))
 		}
 	}
 
-	if len(compiled) > 0 {
-		return append(listed, compiled...)
+	if len(source) == 0 {
+		source = compiled
 	}
-	return append(listed, source...)
+	ds := slices.Concat(listed, source)
+	slices.SortStableFunc(ds, func(a, b diag.Diag) int {
+		return cmp.Or(
+			strings.Compare(a.Pos.Filename, b.Pos.Filename),
+			cmp.Compare(a.Pos.Line, b.Pos.Line),
+			cmp.Compare(a.Pos.Column, b.Pos.Column),
+		)
+	})
+	return ds
 }
 
 // compilerLine matches the line a compiler message starts on,

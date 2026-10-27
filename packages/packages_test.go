@@ -171,15 +171,16 @@ func TestLoad_Diags(t *testing.T) {
 	}{
 		{
 			// The compiler reports both errors and go/types reports them again;
-			// each appears once.
+			// each appears once, in source order although go/types reports the
+			// unused variable last.
 			name:    "type errors",
 			files:   map[string]string{"bad/bad.go": "package bad\n\nfunc F() int { var x int; return \"s\" }\n"},
 			pattern: "./bad",
 			want:    []string{"bad/bad.go:3:20", "bad/bad.go:3:34"},
 		},
 		{
-			// go/parser reports this one mistake four times over; the compiler
-			// reports it once.
+			// go/parser reports this one mistake four times over, all on one
+			// line.
 			name:    "syntax error",
 			files:   map[string]string{"syntax/syntax.go": "package syntax\n\nfunc F( {\n"},
 			pattern: "./syntax",

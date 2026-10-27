@@ -97,6 +97,20 @@ func TestPackageName(t *testing.T) {
 	}
 }
 
+// The caller reports the error at the directory, so the message does not name
+// it again.
+func TestPackageName_Disagreement(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "fixture")
+	put(t, dir, map[string]string{"fixture.go": "package fixture\n"})
+
+	_, err := output.PackageName(dir, "fixture_gen.go", "fx")
+	if want := "the Go files there declare package fixture, not fx"; err == nil || err.Error() != want {
+		t.Errorf("PackageName() error = %v, want %q", err, want)
+	}
+}
+
 func TestPackageName_UnreadableDirectory(t *testing.T) {
 	t.Parallel()
 

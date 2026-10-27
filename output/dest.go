@@ -23,10 +23,12 @@ import (
 // helper declaring package main does not count, and neither does
 // generatedFile, so that what an earlier run wrote cannot pin the name of the
 // next.
+//
+// An error leaves dir out, for the caller to report it at dir.
 func PackageName(dir, generatedFile, want string) (string, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", fmt.Errorf("package name for %s: %w", dir, err)
+		return "", fmt.Errorf("cannot tell the package: %w", err)
 	}
 	declared, err := declaredPackage(abs, generatedFile)
 	if err != nil {
@@ -36,7 +38,7 @@ func PackageName(dir, generatedFile, want string) (string, error) {
 	name := filepath.Base(abs)
 	switch {
 	case declared != "" && want != "" && want != declared:
-		return "", fmt.Errorf("%s already holds package %s, not %s", dir, declared, want)
+		return "", fmt.Errorf("the Go files there declare package %s, not %s", declared, want)
 	case declared != "":
 		name = declared
 	case want != "":
@@ -59,7 +61,7 @@ func declaredPackage(dir, generatedFile string) (string, error) {
 	ctx.ReadDir = func(d string) ([]fs.FileInfo, error) {
 		entries, err := os.ReadDir(d)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", d, err)
+			return nil, pathless(err)
 		}
 		infos := make([]fs.FileInfo, 0, len(entries))
 		for _, e := range entries {
@@ -68,7 +70,7 @@ func declaredPackage(dir, generatedFile string) (string, error) {
 			}
 			info, err := e.Info()
 			if err != nil {
-				return nil, fmt.Errorf("read %s: %w", d, err)
+				return nil, pathless(err)
 			}
 			infos = append(infos, info)
 		}
@@ -80,7 +82,7 @@ func declaredPackage(dir, generatedFile string) (string, error) {
 		return "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("package name for %s: %w", dir, err)
+		return "", fmt.Errorf("cannot tell the package: %w", err)
 	}
 	return pkg.Name, nil
 }

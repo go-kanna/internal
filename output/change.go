@@ -1,0 +1,149 @@
+// Package output carries out what a generator run decided to do to the files on
+// disk, with the guards every generator needs and none should reimplement: a
+// file that is not generated is never replaced or removed, and checking tells
+// a stale file apart from a missing, hand-written, or unreadable one.
+package output
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"os"
+	"path/filepath"
+
+	"github.com/go-kanna/internal/diag"
+)
+
+// Change is one thing a run does to a file: write Data to Path or, with
+// Remove, delete what an earlier run left there.
+type Change struct {
+	Path   string
+	Data   []byte
+	Remove bool
+}
+
+// Action is what Apply did to a file.
+type Action int
+
+const (
+	Wrote Action = iota
+	Removed
+	Unchanged
+)
+
+func (a Action) String() string {
+	switch a {
+	case Wrote:
+		return "wrote"
+	case Removed:
+		return "removed"
+	case Unchanged:
+		return "unchanged"
+	default:
+		return fmt.Sprintf("Action(%d)", int(a))
+	}
+}
+
+// Applied is a file Apply acted on, and how.
+type Applied struct {
+	Path   string
+	Action Action
+}
+
+// handWritten explains why a file without the generated-code header is left
+// alone. The path a generator writes to is set by flags, and a typo in one must
+// not cost anyone a hand-written file.
+const handWritten = "has no generated-code header, so it looks hand-written; go generate leaves it alone"
+
+// Check reports every file that changes would alter, instead of altering it:
+// a CI failure should name everything one go generate fixes. The ways a file
+// can fail are kept apart, because go generate fixes only some of them.
+func Check(changes []Change) []diag.Diag {
+	var ds []diag.Diag
+	for _, c := range changes {
+		at := token.Position{Filename: c.Path}
+		existing, err := os.ReadFile(filepath.Clean(c.Path))
+
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			if !c.Remove {
+				ds = append(ds, diag.Errorf(at, "not generated yet; run go generate"))
+			}
+		case err != nil:
+			ds = append(ds, diag.Errorf(at, "%v", pathless(err)))
+		case !isGenerated(existing):
+			if c.Remove || !bytes.Equal(existing, c.Data) {
+				ds = append(ds, diag.Errorf(at, "%s", handWritten))
+			}
+		case c.Remove:
+			ds = append(ds, diag.Errorf(at, "left over from an earlier run; run go generate"))
+		case !bytes.Equal(existing, c.Data):
+			ds = append(ds, diag.Errorf(at, "out of date; run go generate"))
+		}
+	}
+	return ds
+}
+
+// Apply makes changes, stopping at the first that fails. A file already
+// holding what it would be given is left alone, as is a file to be removed
+// that is already gone.
+func Apply(changes []Change) ([]Applied, []diag.Diag) {
+	done := make([]Applied, 0, len(changes))
+	for _, c := range changes {
+		action, err := apply(c)
+		if err != nil {
+			return done, []diag.Diag{diag.Errorf(token.Position{Filename: c.Path}, "%v", err)}
+		}
+		done = append(done, Applied{Path: c.Path, Action: action})
+	}
+	return done, nil
+}
+
+func apply(c Change) (Action, error) {
+	existing, err := os.ReadFile(filepath.Clean(c.Path))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		if c.Remove {
+			return Unchanged, nil
+		}
+	case err != nil:
+		return 0, pathless(err)
+	case !c.Remove && bytes.Equal(existing, c.Data):
+		return Unchanged, nil
+	case !isGenerated(existing):
+		return 0, errors.New(handWritten)
+	}
+
+	if c.Remove {
+		return Removed, pathless(os.Remove(c.Path))
+	}
+	// Generated source is read like the rest of the package, so it gets the
+	// modes gofmt and go generate leave files and directories with.
+	//nolint:gosec // see above
+	if err := os.MkdirAll(filepath.Dir(c.Path), 0o755); err != nil {
+		return 0, pathless(err)
+	}
+	//nolint:gosec // see above
+	return Wrote, pathless(os.WriteFile(c.Path, c.Data, 0o644))
+}
+
+// isGenerated reports whether src carries the generated-code marker, read the
+// way Go defines it rather than by prefix: a license header or a build
+// constraint above the marker must not lock a generator out of its own output.
+func isGenerated(src []byte) bool {
+	f, _ := parser.ParseFile(token.NewFileSet(), "", src, parser.PackageClauseOnly|parser.ParseComments)
+	return f != nil && ast.IsGenerated(f)
+}
+
+// pathless drops the path a *fs.PathError spells out, for an error reported
+// in a diagnostic positioned at that path already.
+func pathless(err error) error {
+	if pe, ok := errors.AsType[*fs.PathError](err); ok {
+		return fmt.Errorf("%s: %w", pe.Op, pe.Err)
+	}
+	return err
+}

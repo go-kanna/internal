@@ -13,6 +13,7 @@ and a minor release may break the one before it.
 ## Packages
 
 - [`diag`](./diag): the problems a generator reports, each tied to a source position.
+- [`directive`](./directive): finds the `//kanna:<key>` comments that mark a declaration for a generator.
 - [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, and reports
   what went wrong as diagnostics.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.

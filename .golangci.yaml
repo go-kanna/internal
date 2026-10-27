@@ -2,12 +2,15 @@ version: "2"
 
 formatters:
   enable:
+    - gci
     - gofmt
     - goimports
   settings:
-    goimports:
-      local-prefixes:
-        - github.com/go-kanna
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
 
 linters:
   default: all

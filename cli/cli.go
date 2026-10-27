@@ -43,7 +43,8 @@ type Command[C any] struct {
 	Summary string
 
 	// Args shows the arguments the command takes after its flags, such as
-	// "[packages]".
+	// "[packages]". A command whose Args is empty takes none, and refuses any it
+	// is given as a mistake in the command line.
 	Args string
 
 	// Help, if set, is printed in the usage below the synopsis.
@@ -96,6 +97,10 @@ func (c Command[C]) Exec(env Env, args []string) int {
 		c.usage(env.Out, fs)
 		return ExitOK
 	case err != nil:
+		c.usage(env.Err, fs)
+		return ExitUsage
+	case c.Args == "" && fs.NArg() > 0:
+		fmt.Fprintf(env.Err, "unexpected argument %q\n", fs.Arg(0))
 		c.usage(env.Err, fs)
 		return ExitUsage
 	}

@@ -288,3 +288,30 @@ func TestExec_UsageAndVersion(t *testing.T) {
 		t.Errorf("usage lists no -tags or -check:\n%s", got.stdout)
 	}
 }
+
+// A command that takes no arguments refuses one, rather than leave Run to
+// ignore it.
+func TestExec_NoArguments(t *testing.T) {
+	t.Parallel()
+
+	ran := false
+	cmd := command(func(string, config, []string) ([]output.Change, []diag.Diag) {
+		ran = true
+		return nil, nil
+	})
+	cmd.Args, cmd.Help = "", ""
+
+	got := execute(t, cmd, t.TempDir(), "-tags", "a", "extra")
+	wantErr := "unexpected argument \"extra\"\n" +
+		"kanna-test: generate what tests need\n\nUsage:\n  kanna-test [flags]\n\nFlags:\n"
+	if got.code != cli.ExitUsage || !strings.HasPrefix(got.err, wantErr) || got.stdout != "" {
+		t.Errorf("Exec() = %+v, want code %d and stderr %q...", got, cli.ExitUsage, wantErr)
+	}
+	if ran {
+		t.Error("Exec() ran the generator")
+	}
+
+	if got := execute(t, cmd, t.TempDir(), "-tags", "a"); got.code != cli.ExitOK || !ran {
+		t.Errorf("Exec() without arguments = %+v, ran = %v, want code %d and a run", got, ran, cli.ExitOK)
+	}
+}

@@ -45,6 +45,7 @@ func TestLoad_SetsAsideStaleRegeneratedFiles(t *testing.T) {
 	tests := []struct {
 		name         string
 		files        map[string]string
+		tests        bool
 		wantErrorsIn []string
 		wantSetAside []string
 	}{
@@ -99,6 +100,64 @@ func TestLoad_SetsAsideStaleRegeneratedFiles(t *testing.T) {
 			wantErrorsIn: []string{"p/validate_gen.go"},
 		},
 		{
+			// The go command reads validate_gen.go first and blames x.go.
+			name: "a package since renamed",
+			files: map[string]string{
+				"p/x.go":            "package renamed\n\ntype T struct{}\n",
+				"p/validate_gen.go": header + "package p\n\nfunc (T) Validate() error { return nil }\n",
+			},
+			wantSetAside: []string{"p/validate_gen.go"},
+		},
+		{
+			name: "a package since renamed, blaming the generated file",
+			files: map[string]string{
+				"p/p.go":            "package renamed\n\ntype T struct{}\n",
+				"p/validate_gen.go": header + "package p\n\nfunc (T) Validate() error { return nil }\n",
+			},
+			wantSetAside: []string{"p/validate_gen.go"},
+		},
+		{
+			// Every hand-written file again comes after validate_gen.go.
+			name: "a package since renamed, with its tests",
+			files: map[string]string{
+				"p/x.go":            "package renamed\n\ntype T struct{}\n",
+				"p/x_test.go":       "package renamed\n\nimport \"testing\"\n\nfunc TestT(*testing.T) {}\n",
+				"p/y_test.go":       "package renamed_test\n\nimport \"testing\"\n\nfunc TestU(*testing.T) {}\n",
+				"p/validate_gen.go": header + "package p\n\nfunc (T) Validate() error { return nil }\n",
+			},
+			tests:        true,
+			wantSetAside: []string{"p/validate_gen.go"},
+		},
+		{
+			name: "hand-written files that disagree on their package",
+			files: map[string]string{
+				"p/x.go":            "package renamed\n",
+				"p/y.go":            "package other\n",
+				"p/validate_gen.go": header + "package p\n",
+			},
+			wantErrorsIn: []string{"p/x.go", "p/y.go"},
+		},
+		{
+			name: "a package since renamed, its generated file not named as regenerated",
+			files: map[string]string{
+				"p/x.go":         "package renamed\n",
+				"p/other_gen.go": header + "package p\n",
+			},
+			wantErrorsIn: []string{"p/x.go"},
+		},
+		{
+			// a_gen.go, which the go command reads first, still keeps the package
+			// from loading; validate_gen.go stays emptied all the same.
+			name: "a package since renamed, with another generator's file declaring the old name",
+			files: map[string]string{
+				"p/a_gen.go":        header + "package p\n",
+				"p/x.go":            "package renamed\n\ntype T struct{}\n",
+				"p/validate_gen.go": header + "package p\n\nfunc (T) Validate() error { return nil }\n",
+			},
+			wantErrorsIn: []string{"p/validate_gen.go", "p/x.go"},
+			wantSetAside: []string{"p/validate_gen.go"},
+		},
+		{
 			name: "an error outside the regenerated files",
 			files: map[string]string{
 				"p/p.go":            "package p\n\ntype T struct{}\n\nvar x int = \"s\"\n",
@@ -113,7 +172,7 @@ func TestLoad_SetsAsideStaleRegeneratedFiles(t *testing.T) {
 			t.Parallel()
 
 			dir := module(t, tt.files)
-			set := load(t, []string{"./p"}, packages.Config{Dir: dir, Regenerated: []string{"validate_gen.go"}})
+			set := load(t, []string{"./p"}, packages.Config{Dir: dir, Tests: tt.tests, Regenerated: []string{"validate_gen.go"}})
 
 			if got := relative(t, dir, errorFiles(set.Diags)); !slices.Equal(got, tt.wantErrorsIn) {
 				t.Errorf("errors in %q, want %q\n%v", got, tt.wantErrorsIn, set.Diags)

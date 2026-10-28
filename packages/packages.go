@@ -48,9 +48,10 @@ type Config struct {
 
 	// Regenerated names the files the caller is about to write again in the
 	// packages it loads, such as "validate_gen.go". What they hold is about to
-	// be replaced, so one that no longer type-checks is set aside for the load;
-	// see Load. Only a generated file is ever set aside: a hand-written file of
-	// the same name is not the caller's to replace.
+	// be replaced, so one that no longer type-checks, or that still declares a
+	// package since renamed, is set aside for the load; see Load. Only a
+	// generated file is ever set aside: a hand-written file of the same name is
+	// not the caller's to replace.
 	Regenerated []string
 }
 
@@ -97,6 +98,12 @@ const mode = packages.NeedName |
 // compiling; if errors still point into it, the whole file is emptied. Errors
 // anywhere else never set anything aside, so a real mistake is reported as it
 // is.
+//
+// Renaming a package leaves the output of an earlier run declaring the old
+// name, and the go command then refuses the whole package, as likely blaming a
+// hand-written file as the generated one. So before anything else, a file in
+// cfg.Regenerated that declares another package than the hand-written files of
+// its package, which all declare the same one, is emptied, declaring theirs.
 func Load(patterns []string, cfg Config) (Set, error) {
 	set, err := load(patterns, cfg, nil)
 	if err != nil || len(cfg.Regenerated) == 0 {

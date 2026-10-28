@@ -5,7 +5,10 @@ package suggest
 // misspelling of it: an edit or two away, fewer for a short name. Of candidates
 // equally near, the first wins.
 func Closest(name string, candidates []string) (string, bool) {
-	limit := max(1, len(name)/3)
+	limit := 1
+	if len(name) >= 6 {
+		limit = 2
+	}
 
 	best, bestDist := "", limit+1
 	for _, c := range candidates {

@@ -54,6 +54,9 @@ func TestClosest(t *testing.T) {
 		{name: "uri", candidates: rules, want: "url", wantOK: true},
 		// "uuid" is two edits away, and three letters allow only one.
 		{name: "uxd", candidates: rules, wantOK: false},
+		// Three edits are too many however long the name is.
+		{name: "requiredxy", candidates: rules, want: "required", wantOK: true},
+		{name: "requiredxyz", candidates: rules, wantOK: false},
 		{name: "xyz", candidates: rules, wantOK: false},
 		{name: "phone", candidates: rules, wantOK: false},
 		{name: "emial", candidates: nil, wantOK: false},

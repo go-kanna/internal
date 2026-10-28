@@ -24,6 +24,8 @@ and a minor release may break the one before it.
   generator generates with golden files.
 - [`scan`](./scan): reads the struct types a package declares.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
+- [`valuetype`](./valuetype): knows the value types kanna-value generates by their shape, and names their accessor and
+  constructors, for kanna-value and the generators reading its types alike.
 
 ## Development
 

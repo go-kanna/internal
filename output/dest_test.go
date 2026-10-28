@@ -224,21 +224,35 @@ func TestSameDir(t *testing.T) {
 	if err := os.Symlink(dir, link); err != nil {
 		t.Fatal(err)
 	}
+	// Only a file system that ignores case finds the directory under this
+	// spelling.
+	cased := filepath.Join(root, "MODEL")
+	_, errCased := os.Stat(cased)
 
 	tests := []struct {
 		name string
 		a, b string
 		want bool
+		skip bool
 	}{
 		{name: "same path", a: dir, b: dir, want: true},
-		{name: "another spelling", a: dir, b: filepath.Join(root, ".", "fixture", "..", "model"), want: true},
+		// Spelled with . and .., which Join would have cleaned away.
+		{name: "another spelling", a: dir, b: filepath.FromSlash(root + "/./fixture/../model"), want: true},
+		{name: "another case", a: dir, b: cased, want: true, skip: errCased != nil},
 		{name: "through a symlink", a: link, b: dir, want: true},
 		{name: "different directories", a: dir, b: other, want: false},
 		{name: "a missing directory", a: dir, b: filepath.Join(root, "missing"), want: false},
 	}
 	for _, tt := range tests {
-		if got := output.SameDir(tt.a, tt.b); got != tt.want {
-			t.Errorf("%s: SameDir() = %v, want %v", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.skip {
+				t.Skip("the file system tells the spellings apart")
+			}
+			if got := output.SameDir(tt.a, tt.b); got != tt.want {
+				t.Errorf("SameDir() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

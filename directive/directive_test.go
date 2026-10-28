@@ -49,9 +49,9 @@ func TestFind(t *testing.T) {
 		wantLine int // 0 when nothing is found
 		want     []string
 	}{
-		{name: "no comment", key: "ignore"},
-		{name: "unrelated comment", lines: []string{"// T stands in for a real record."}, key: "ignore"},
-		{name: "marker only", lines: []string{"//kanna:ignore"}, key: "ignore", wantLine: 3},
+		{name: "no comment", key: "validate"},
+		{name: "unrelated comment", lines: []string{"// T stands in for a real record."}, key: "validate"},
+		{name: "marker only", lines: []string{"//kanna:validate"}, key: "validate", wantLine: 3},
 		{
 			name:     "arguments",
 			lines:    []string{"//kanna:container name=NewFoo must"},
@@ -59,7 +59,7 @@ func TestFind(t *testing.T) {
 			wantArgs: "name=NewFoo must",
 			wantLine: 3,
 		},
-		{name: "trailing space", lines: []string{"//kanna:ignore   "}, key: "ignore", wantLine: 3},
+		{name: "trailing space", lines: []string{"//kanna:validate   "}, key: "validate", wantLine: 3},
 		{
 			name:     "tab before the arguments",
 			lines:    []string{"//kanna:container\tname=NewFoo"},
@@ -69,21 +69,21 @@ func TestFind(t *testing.T) {
 		},
 		{
 			name:     "among other comment lines",
-			lines:    []string{"// T is a person.", "//kanna:ignore", "// Not generated."},
-			key:      "ignore",
+			lines:    []string{"// T is a person.", "//kanna:validate", "// Not generated."},
+			key:      "validate",
 			wantLine: 4,
 		},
-		{name: "another generator's key", lines: []string{"//kanna:container"}, key: "ignore"},
-		{name: "longer key sharing the prefix", lines: []string{"//kanna:ignoreXYZ"}, key: "ignore"},
-		{name: "block comment", lines: []string{"/* kanna:ignore */"}, key: "ignore"},
-		{name: "prose mentioning the directive", lines: []string{"// Mark it kanna:ignore to skip it."}, key: "ignore"},
+		{name: "another generator's key", lines: []string{"//kanna:container"}, key: "validate"},
+		{name: "longer key sharing the prefix", lines: []string{"//kanna:validateXYZ"}, key: "validate"},
+		{name: "block comment", lines: []string{"/* kanna:validate */"}, key: "validate"},
+		{name: "prose mentioning the directive", lines: []string{"// Mark it kanna:validate to check it."}, key: "validate"},
 		{
 			name:  "space after the comment marker",
-			lines: []string{"// kanna:ignore"},
-			key:   "ignore",
+			lines: []string{"// kanna:validate"},
+			key:   "validate",
 			want: []string{
-				`p.go:3:1: warning: "// kanna:ignore" is not recognized as a directive; ` +
-					`write it as "//kanna:ignore" with no space`,
+				`p.go:3:1: warning: "// kanna:validate" is not recognized as a directive; ` +
+					`write it as "//kanna:validate" with no space`,
 			},
 		},
 		{
@@ -98,12 +98,12 @@ func TestFind(t *testing.T) {
 		},
 		{
 			name:     "spaced line before the real one",
-			lines:    []string{"// kanna:ignore", "//kanna:ignore"},
-			key:      "ignore",
+			lines:    []string{"// kanna:validate", "//kanna:validate"},
+			key:      "validate",
 			wantLine: 4,
 			want: []string{
-				`p.go:3:1: warning: "// kanna:ignore" is not recognized as a directive; ` +
-					`write it as "//kanna:ignore" with no space`,
+				`p.go:3:1: warning: "// kanna:validate" is not recognized as a directive; ` +
+					`write it as "//kanna:validate" with no space`,
 			},
 		},
 		{
@@ -165,7 +165,7 @@ func TestFind(t *testing.T) {
 func TestFind_NilDoc(t *testing.T) {
 	t.Parallel()
 
-	got, ds := directive.Find(token.NewFileSet(), nil, "ignore")
+	got, ds := directive.Find(token.NewFileSet(), nil, "validate")
 	if got.Found || len(ds) > 0 {
 		t.Errorf("Find(nil) = %+v, %v, want nothing", got, ds)
 	}

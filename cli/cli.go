@@ -2,6 +2,11 @@
 // generator shares, reports diagnostics, and checks or applies the changes the
 // generator decided on. What is left to each generator is its own flags and
 // working out those changes.
+//
+// The environment variable KANNA_CHECK, set to a true value as
+// strconv.ParseBool reads it, turns on -check in every generator at once. The
+// flags of a //go:generate line are fixed, so KANNA_CHECK=1 go generate ./...
+// is how a build finds generated files that have drifted from their generators.
 package cli
 
 import (
@@ -12,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/output"
@@ -31,6 +37,9 @@ type Env struct {
 	// Dir is the directory the run works in, which go generate sets to the one
 	// holding the directive. Empty means the working directory.
 	Dir string
+
+	// Getenv reads the environment. Nil means an empty one.
+	Getenv func(key string) string
 }
 
 // Command is a generator run from the command line. C holds what its own flags
@@ -62,7 +71,7 @@ type Command[C any] struct {
 // Main runs the command on the command line, reporting to stdout and stderr,
 // and returns the code to exit with.
 func (c Command[C]) Main(args []string) int {
-	return c.Exec(Env{Out: os.Stdout, Err: os.Stderr}, args)
+	return c.Exec(Env{Out: os.Stdout, Err: os.Stderr, Getenv: os.Getenv}, args)
 }
 
 // Exec runs the command with args, the arguments after its name, in env.
@@ -82,7 +91,8 @@ func (c Command[C]) Exec(env Env, args []string) int {
 		cfg                     C
 		check, verbose, version bool
 	)
-	fs.BoolVar(&check, "check", false, "check that the generated files are up to date instead of writing them")
+	fs.BoolVar(&check, "check", false,
+		"check that the generated files are up to date instead of writing them; KANNA_CHECK=1 does the same")
 	fs.BoolVar(&verbose, "v", false, "list the files written, removed, or left unchanged")
 	fs.BoolVar(&version, "version", false, "print the version and exit")
 	if c.Flags != nil {
@@ -110,6 +120,13 @@ func (c Command[C]) Exec(env Env, args []string) int {
 		fmt.Fprintln(env.Out, c.Name, buildVersion())
 		return ExitOK
 	}
+
+	byEnv, err := checkEnv(env)
+	if err != nil {
+		fmt.Fprintf(env.Err, "%s: %v\n", c.Name, err)
+		return ExitUsage
+	}
+	check = check || byEnv
 
 	dir, err := filepath.Abs(env.Dir)
 	if err != nil {
@@ -151,6 +168,23 @@ func (c Command[C]) usage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprint(w, "\nFlags:\n")
 	fs.SetOutput(w)
 	fs.PrintDefaults()
+}
+
+// checkEnv reports whether KANNA_CHECK turns on -check. A value that is not a
+// boolean is an error, rather than a run that writes what it was meant to check.
+func checkEnv(env Env) (bool, error) {
+	if env.Getenv == nil {
+		return false, nil
+	}
+	v := env.Getenv("KANNA_CHECK")
+	if v == "" {
+		return false, nil
+	}
+	check, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("KANNA_CHECK=%q is not a boolean such as 1 or true", v)
+	}
+	return check, nil
 }
 
 func exitCode(ds []diag.Diag) int {

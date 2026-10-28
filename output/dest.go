@@ -44,7 +44,7 @@ func PackageName(dir, generatedFile, want string) (string, error) {
 	case want != "":
 		name = want
 	}
-	if !token.IsIdentifier(name) {
+	if name == "_" || !token.IsIdentifier(name) {
 		return "", fmt.Errorf("%q is not a valid package name", name)
 	}
 	return name, nil

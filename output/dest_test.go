@@ -72,6 +72,8 @@ func TestPackageName(t *testing.T) {
 		{name: "directory name that is no identifier", dir: "my-fixture", wantErr: true},
 		{name: "wanted name for such a directory", dir: "my-fixture", want: "fixture", result: "fixture"},
 		{name: "wanted name that is no identifier", dir: "fixture", want: "1fixture", wantErr: true},
+		// An identifier to token.IsIdentifier, but no package can be called so.
+		{name: "wanted name that is the blank identifier", dir: "fixture", want: "_", wantErr: true},
 	}
 
 	for _, tt := range tests {

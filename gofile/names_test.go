@@ -25,6 +25,8 @@ func TestImport(t *testing.T) {
 		{path: "errors", name: "errors", want: "errors"},
 		{path: "example.com/app/user", name: "user", want: ""},
 		{path: "example.com/log", name: "log", want: "log2"},
+		// Imported as error, the package would hide the predeclared type.
+		{path: "example.com/error", name: "error", want: "error2"},
 	}
 	for _, tt := range tests {
 		if got := f.Import(tt.path, tt.name); got != tt.want {
@@ -48,6 +50,10 @@ func TestScope_Name(t *testing.T) {
 		{base: "i", want: "i2"},
 		{base: "v", want: "v2"},
 		{base: "x", want: "x2"},
+		// A variable named type would not compile, and one named error would
+		// hide the type the body spells out.
+		{base: "type", want: "type2"},
+		{base: "error", want: "error2"},
 	}
 	for _, tt := range tests {
 		if got := s.Name(tt.base); got != tt.want {

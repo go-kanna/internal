@@ -1,6 +1,7 @@
 package gofile
 
 import (
+	"go/token"
 	"go/types"
 	"strconv"
 )
@@ -71,8 +72,14 @@ func (s Scope) Name(base string) string {
 // scope nor also holds.
 func (f *File) free(base string, also map[string]bool) string {
 	candidate := base
-	for n := 2; f.file[candidate] || also[candidate]; n++ {
+	for n := 2; f.taken(candidate) || also[candidate]; n++ {
 		candidate = base + strconv.Itoa(n)
 	}
 	return candidate
+}
+
+// taken reports whether name is in the file's scope, or is a keyword or a
+// predeclared identifier, which no file may introduce.
+func (f *File) taken(name string) bool {
+	return f.file[name] || token.IsKeyword(name) || types.Universe.Lookup(name) != nil
 }

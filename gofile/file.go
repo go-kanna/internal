@@ -5,7 +5,8 @@
 // that it collides neither with what the package declares nor with a local
 // variable of the body, and a local variable is named so that it shadows no
 // import. Getting either wrong yields a file that does not compile, or one that
-// compiles against the wrong package.
+// compiles against the wrong package. Neither is ever a keyword or a
+// predeclared identifier such as error, which the body spells out.
 package gofile
 
 import (

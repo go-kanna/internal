@@ -2,8 +2,8 @@
 // for a generator.
 //
 // Every generator writes into one namespace and tells itself apart by the key
-// that follows it: //kanna:validate, //kanna:container, //kanna:ignore. Reading
-// them in one place keeps the syntax from drifting apart per generator.
+// that follows it: //kanna:validate, //kanna:container, //kanna:fixture skip.
+// Reading them in one place keeps the syntax from drifting apart per generator.
 package directive
 
 import (
@@ -85,8 +85,8 @@ func Find(fset *token.FileSet, doc *ast.CommentGroup, key string) (Directive, []
 
 // parse splits a comment body such as "kanna:container name=A" into its key and
 // arguments, reporting whether the body is in the kanna namespace at all. The
-// key runs up to the first space, so kanna:ignoreXYZ is a key of its own rather
-// than ignore with something stuck to it.
+// key runs up to the first space, so kanna:validateXYZ is a key of its own
+// rather than validate with something stuck to it.
 func parse(body string) (key, args string, ok bool) {
 	rest, ok := strings.CutPrefix(strings.TrimSpace(body), namespace)
 	if !ok {

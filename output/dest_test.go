@@ -98,16 +98,46 @@ func TestPackageName(t *testing.T) {
 }
 
 // The caller reports the error at the directory, so the message does not name
-// it again.
-func TestPackageName_Disagreement(t *testing.T) {
+// it again: a file is named relative to it.
+func TestPackageName_ErrorsLeaveTheDirectoryOut(t *testing.T) {
 	t.Parallel()
 
-	dir := filepath.Join(t.TempDir(), "fixture")
-	put(t, dir, map[string]string{"fixture.go": "package fixture\n"})
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  string // the wanted package name
+		err   string
+	}{
+		{
+			name:  "disagreement",
+			files: map[string]string{"fixture.go": "package fixture\n"},
+			want:  "fx",
+			err:   "the Go files there declare package fixture, not fx",
+		},
+		{
+			name:  "two packages",
+			files: map[string]string{"a.go": "package one\n", "b.go": "package two\n"},
+			err:   "the Go files there declare two packages: one (a.go) and two (b.go)",
+		},
+		{
+			name:  "a file that does not parse",
+			files: map[string]string{"a.go": "hello\n"},
+			err:   "cannot tell the package: a.go:1:1: expected 'package', found hello",
+		},
+	}
 
-	_, err := output.PackageName(dir, "fixture_gen.go", "fx")
-	if want := "the Go files there declare package fixture, not fx"; err == nil || err.Error() != want {
-		t.Errorf("PackageName() error = %v, want %q", err, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := filepath.Join(t.TempDir(), "fixture")
+			put(t, dir, tt.files)
+
+			_, err := output.PackageName(dir, "fixture_gen.go", tt.want)
+			if err == nil || err.Error() != tt.err {
+				t.Errorf("PackageName() error = %v, want %q", err, tt.err)
+			}
+		})
 	}
 }
 

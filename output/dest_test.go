@@ -72,6 +72,8 @@ func TestPackageName(t *testing.T) {
 		{name: "directory name that is no identifier", dir: "my-fixture", wantErr: true},
 		{name: "wanted name for such a directory", dir: "my-fixture", want: "fixture", result: "fixture"},
 		{name: "wanted name that is no identifier", dir: "fixture", want: "1fixture", wantErr: true},
+		// An identifier to token.IsIdentifier, but no package can be called so.
+		{name: "wanted name that is the blank identifier", dir: "fixture", want: "_", wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -98,16 +100,46 @@ func TestPackageName(t *testing.T) {
 }
 
 // The caller reports the error at the directory, so the message does not name
-// it again.
-func TestPackageName_Disagreement(t *testing.T) {
+// it again: a file is named relative to it.
+func TestPackageName_ErrorsLeaveTheDirectoryOut(t *testing.T) {
 	t.Parallel()
 
-	dir := filepath.Join(t.TempDir(), "fixture")
-	put(t, dir, map[string]string{"fixture.go": "package fixture\n"})
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  string // the wanted package name
+		err   string
+	}{
+		{
+			name:  "disagreement",
+			files: map[string]string{"fixture.go": "package fixture\n"},
+			want:  "fx",
+			err:   "the Go files there declare package fixture, not fx",
+		},
+		{
+			name:  "two packages",
+			files: map[string]string{"a.go": "package one\n", "b.go": "package two\n"},
+			err:   "the Go files there declare two packages: one (a.go) and two (b.go)",
+		},
+		{
+			name:  "a file that does not parse",
+			files: map[string]string{"a.go": "hello\n"},
+			err:   "cannot tell the package: a.go:1:1: expected 'package', found hello",
+		},
+	}
 
-	_, err := output.PackageName(dir, "fixture_gen.go", "fx")
-	if want := "the Go files there declare package fixture, not fx"; err == nil || err.Error() != want {
-		t.Errorf("PackageName() error = %v, want %q", err, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := filepath.Join(t.TempDir(), "fixture")
+			put(t, dir, tt.files)
+
+			_, err := output.PackageName(dir, "fixture_gen.go", tt.want)
+			if err == nil || err.Error() != tt.err {
+				t.Errorf("PackageName() error = %v, want %q", err, tt.err)
+			}
+		})
 	}
 }
 
@@ -192,21 +224,35 @@ func TestSameDir(t *testing.T) {
 	if err := os.Symlink(dir, link); err != nil {
 		t.Fatal(err)
 	}
+	// Only a file system that ignores case finds the directory under this
+	// spelling.
+	cased := filepath.Join(root, "MODEL")
+	_, errCased := os.Stat(cased)
 
 	tests := []struct {
 		name string
 		a, b string
 		want bool
+		skip bool
 	}{
 		{name: "same path", a: dir, b: dir, want: true},
-		{name: "another spelling", a: dir, b: filepath.Join(root, ".", "fixture", "..", "model"), want: true},
+		// Spelled with . and .., which Join would have cleaned away.
+		{name: "another spelling", a: dir, b: filepath.FromSlash(root + "/./fixture/../model"), want: true},
+		{name: "another case", a: dir, b: cased, want: true, skip: errCased != nil},
 		{name: "through a symlink", a: link, b: dir, want: true},
 		{name: "different directories", a: dir, b: other, want: false},
 		{name: "a missing directory", a: dir, b: filepath.Join(root, "missing"), want: false},
 	}
 	for _, tt := range tests {
-		if got := output.SameDir(tt.a, tt.b); got != tt.want {
-			t.Errorf("%s: SameDir() = %v, want %v", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.skip {
+				t.Skip("the file system tells the spellings apart")
+			}
+			if got := output.SameDir(tt.a, tt.b); got != tt.want {
+				t.Errorf("SameDir() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

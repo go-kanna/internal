@@ -13,6 +13,17 @@ import (
 	"github.com/go-kanna/internal/packages"
 )
 
+// TestMain loads every module the tests write outside any workspace. A GOWORK
+// pinned by the environment would otherwise put them outside the modules it
+// lists, which the go command refuses to load.
+func TestMain(m *testing.M) {
+	// Before any test runs: t.Setenv would rule out t.Parallel.
+	if err := os.Setenv("GOWORK", "off"); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
+
 // module writes files into a new module named example.com/m and returns its
 // directory, with symlinks resolved so that it matches the paths the go command
 // reports.

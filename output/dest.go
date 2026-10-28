@@ -44,7 +44,7 @@ func PackageName(dir, generatedFile, want string) (string, error) {
 	case want != "":
 		name = want
 	}
-	if !token.IsIdentifier(name) {
+	if name == "_" || !token.IsIdentifier(name) {
 		return "", fmt.Errorf("%q is not a valid package name", name)
 	}
 	return name, nil
@@ -81,8 +81,15 @@ func declaredPackage(dir, generatedFile string) (string, error) {
 	if _, ok := errors.AsType[*build.NoGoError](err); ok {
 		return "", nil
 	}
+	if e, ok := errors.AsType[*build.MultiplePackageError](err); ok {
+		return "", fmt.Errorf("the Go files there declare two packages: %s (%s) and %s (%s)",
+			e.Packages[0], e.Files[0], e.Packages[1], e.Files[1])
+	}
 	if err != nil {
-		return "", fmt.Errorf("cannot tell the package: %w", err)
+		// go/build names a file by its full path; the caller reports the error
+		// at dir, so the file is named relative to it.
+		return "", fmt.Errorf("cannot tell the package: %s",
+			strings.ReplaceAll(err.Error(), dir+string(filepath.Separator), ""))
 	}
 	return pkg.Name, nil
 }

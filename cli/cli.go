@@ -68,8 +68,9 @@ func (c Command[C]) Main(args []string) int {
 // Exec runs the command with args, the arguments after its name, in env.
 //
 // The flags every command has are -check, which compares the files with what
-// would be generated instead of writing them; -v, which lists what was written
-// or removed; and -version. A run that succeeds says nothing otherwise.
+// would be generated instead of writing them; -v, which lists what was written,
+// removed, or left unchanged; and -version. A run that succeeds says nothing
+// otherwise.
 func (c Command[C]) Exec(env Env, args []string) int {
 	fs := flag.NewFlagSet(c.Name, flag.ContinueOnError)
 	fs.SetOutput(env.Err)

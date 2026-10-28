@@ -100,4 +100,8 @@ func TestFile_BytesThatDoNotParse(t *testing.T) {
 	if !strings.Contains(string(got), "func broken( {") {
 		t.Errorf("Bytes() = %q, want the source that failed", got)
 	}
+	// The caller names the file, so the error is gofmt's alone.
+	if strings.Contains(err.Error(), "example.com/app/user") {
+		t.Errorf("Bytes() error = %q, want it without the package", err)
+	}
 }

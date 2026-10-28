@@ -27,7 +27,7 @@ func setAside(patterns []string, cfg Config, set Set) (Set, error) {
 	// as it is here and emptied by the second step.
 	overlay := make(map[string][]byte, len(stale))
 	for _, f := range stale {
-		if stub, err := stubBodies(f.path); err == nil {
+		if stub, ok := stubBodies(f.path); ok {
 			overlay[f.path] = stub
 		}
 	}
@@ -80,13 +80,13 @@ func staleFiles(set Set, regenerated []string) []staleFile {
 }
 
 // stubBodies returns the file at path with every function body replaced by a
-// panic. An import that only the bodies used is renamed to _, or the stub would
-// fail on it instead.
-func stubBodies(path string) ([]byte, error) {
+// panic, or false when the file cannot be read as Go. An import that only the
+// bodies used is renamed to _, or the stub would fail on it instead.
+func stubBodies(path string) ([]byte, bool) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
-		return nil, fmt.Errorf("stub %s: %w", path, err)
+		return nil, false
 	}
 
 	var bodies []*ast.BlockStmt
@@ -117,7 +117,7 @@ func stubBodies(path string) ([]byte, error) {
 
 	var buf bytes.Buffer
 	if err := printer.Fprint(&buf, fset, file); err != nil {
-		return nil, fmt.Errorf("stub %s: %w", path, err)
+		return nil, false
 	}
-	return buf.Bytes(), nil
+	return buf.Bytes(), true
 }

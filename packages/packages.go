@@ -74,10 +74,8 @@ type Set struct {
 	SetAside []string
 }
 
-// mode is what a generator reads. NeedDeps is left out unless Config.Deps asks
-// for it: without it the types of dependencies come from export data, while
-// with it every dependency is parsed and type-checked from source, which more
-// than doubles the load time.
+// mode is what every generator reads; Config.TypesInfo and Config.Deps add to
+// it.
 const mode = packages.NeedName |
 	packages.NeedFiles |
 	packages.NeedCompiledGoFiles |

@@ -15,23 +15,34 @@ import (
 // the run, nor does code calling it as the run is about to change it, so a type
 // error of a root package, one of s.Packages, is deferred to Recheck, which
 // tells once the outputs are in place whether it remains. Every other error
-// blocks: one of a package that is not a root, any error but a type error, and
-// every error of a root that has one of those too.
+// blocks: one of a package outside the main module, any error but a type error,
+// and every error of a package that has one of those too.
+//
+// A type error of a package of the main module that is not a root is deferred
+// too, though nothing checks it again: under go generate ./..., such a package
+// is generated on a run of its own, which mends or reports it, and a run that
+// imports it should not stop on it before, as when its code calls what that run
+// is about to write.
 //
 // A generator that stops on blocking reports SetAsideWarnings along with it.
 // One that goes on reads packages that may not type-check, so it passes over
 // what has an Invalid type: the type error behind it is reported anyway, by
 // Recheck, or by Stopped when the generator stops on errors of its own.
 func (s Set) Split() (blocking, deferred []diag.Diag) {
-	mendable := make(map[string]bool)
+	roots := make(map[*Package]bool, len(s.Packages))
 	for _, p := range s.Packages {
-		if slices.ContainsFunc(p.Errors, func(e packages.Error) bool { return !isTypeError(e) }) {
-			continue
+		roots[p] = true
+	}
+	mendable := make(map[string]bool)
+	packages.Visit(s.Packages, nil, func(p *Package) {
+		if !roots[p] && (p.Module == nil || !p.Module.Main) ||
+			slices.ContainsFunc(p.Errors, func(e packages.Error) bool { return !isTypeError(e) }) {
+			return
 		}
 		for _, f := range p.CompiledGoFiles {
 			mendable[f] = true
 		}
-	}
+	})
 
 	for _, d := range s.Diags {
 		if mendable[d.Pos.Filename] {

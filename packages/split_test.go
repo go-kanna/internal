@@ -47,13 +47,35 @@ func TestSet_Split(t *testing.T) {
 			wantDeferred: []string{"p/p.go:3:9"},
 		},
 		{
-			name: "a type error of a dependency",
+			// b's own run mends it, or reports it.
+			name: "a type error of a dependency in the module",
 			files: map[string]string{
 				"a/a.go": "package a\n\nimport \"example.com/m/b\"\n\nvar _ = b.V\n",
 				"b/b.go": "package b\n\nvar V int\n\n" + undefined,
 			},
 			pattern:      "./a",
+			wantDeferred: []string{"b/b.go:5:9"},
+		},
+		{
+			name: "a syntax error of a dependency in the module",
+			files: map[string]string{
+				"a/a.go": "package a\n\nimport \"example.com/m/b\"\n\nvar _ = b.V\n",
+				"b/b.go": "package b\n\nvar V int\n\nfunc G( {\n",
+			},
+			pattern:      "./a",
 			wantBlocking: []string{"b/b.go:5:9"},
+		},
+		{
+			name: "a type error of a dependency outside the module",
+			files: map[string]string{
+				"go.mod": "module example.com/m\n\ngo 1.26.0\n\nrequire example.com/x v0.0.0\n\n" +
+					"replace example.com/x => ./x\n",
+				"x/go.mod": "module example.com/x\n\ngo 1.26.0\n",
+				"x/x.go":   "package x\n\nvar V int\n\n" + undefined,
+				"a/a.go":   "package a\n\nimport \"example.com/x\"\n\nvar _ = x.V\n",
+			},
+			pattern:      "./a",
+			wantBlocking: []string{"x/x.go:5:9"},
 		},
 		{
 			// b imports a as itself, the test variant is the root.

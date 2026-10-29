@@ -19,10 +19,26 @@ import (
 //
 // A broken dependency has to be looked for: its errors are recorded on the
 // dependency alone, and a package importing it comes back with none of its own.
+//
+// With Config.Tests, a package another root imports comes back twice, as the
+// test variant kept among the roots and as the package itself, which share
+// their files. An error in one of those is reported once.
 func diagnose(roots []*Package, dir string) []diag.Diag {
-	var ds []diag.Diag
+	type key struct {
+		pos token.Position
+		msg string
+	}
+	var (
+		ds   []diag.Diag
+		seen = make(map[key]bool)
+	)
 	packages.Visit(roots, nil, func(p *Package) {
-		ds = append(ds, diagnosePackage(p, dir)...)
+		for _, d := range diagnosePackage(p, dir) {
+			if k := (key{d.Pos, d.Message}); !seen[k] {
+				seen[k] = true
+				ds = append(ds, d)
+			}
+		}
 	})
 	return ds
 }

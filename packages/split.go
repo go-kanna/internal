@@ -20,7 +20,8 @@ import (
 //
 // A generator that stops on blocking reports SetAsideWarnings along with it.
 // One that goes on reads packages that may not type-check, so it passes over
-// what has an invalid type: the type error behind it is reported anyway.
+// what has an Invalid type: the type error behind it is reported anyway, by
+// Recheck, or by Stopped when the generator stops on errors of its own.
 func (s Set) Split() (blocking, deferred []diag.Diag) {
 	mendable := make(map[string]bool)
 	for _, p := range s.Packages {

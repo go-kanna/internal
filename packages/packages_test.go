@@ -325,6 +325,14 @@ func TestLoad_Diags(t *testing.T) {
 			want:    []string{"bad/bad.go:3:20"},
 		},
 		{
+			// The go command reports it too, by a path relative to the
+			// directory it ran in.
+			name:    "a file that does not parse as far as its package clause",
+			files:   map[string]string{"p/p.go": "package p\n", "p/x.go": "<<<<<<< HEAD\n=======\n>>>>>>> f\n\npackage p\n"},
+			pattern: "./p",
+			want:    []string{"-", "p/x.go:1:1"},
+		},
+		{
 			// b imports a, which comes back as itself and as its test variant.
 			name: "a tested package another imports",
 			files: map[string]string{

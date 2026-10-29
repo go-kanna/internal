@@ -293,6 +293,7 @@ func TestLoad_Diags(t *testing.T) {
 		name    string
 		files   map[string]string
 		pattern string
+		tests   bool
 		want    []string
 	}{
 		{
@@ -324,6 +325,18 @@ func TestLoad_Diags(t *testing.T) {
 			want:    []string{"bad/bad.go:3:20"},
 		},
 		{
+			// b imports a, which comes back as itself and as its test variant.
+			name: "a tested package another imports",
+			files: map[string]string{
+				"a/a.go":      "package a\n\nvar X int = \"s\"\n",
+				"a/a_test.go": "package a\n",
+				"b/b.go":      "package b\n\nimport \"example.com/m/a\"\n\nvar _ = a.X\n",
+			},
+			pattern: "./...",
+			tests:   true,
+			want:    []string{"a/a.go:3:13"},
+		},
+		{
 			name:    "no such directory",
 			files:   map[string]string{},
 			pattern: "./nothing",
@@ -336,7 +349,7 @@ func TestLoad_Diags(t *testing.T) {
 			t.Parallel()
 
 			dir := module(t, tt.files)
-			set := load(t, []string{tt.pattern}, packages.Config{Dir: dir})
+			set := load(t, []string{tt.pattern}, packages.Config{Dir: dir, Tests: tt.tests})
 			if got := where(t, dir, set.Diags); !slices.Equal(got, tt.want) {
 				t.Errorf("Diags at %q, want %q\n%v", got, tt.want, set.Diags)
 			}

@@ -1,5 +1,6 @@
-// Package packages loads the packages a generator reads, and reports what went
-// wrong loading them as diagnostics.
+// Package packages loads the packages a generator reads, reports what went
+// wrong loading them as diagnostics, and type-checks them again as they are
+// once what the generator writes is in place.
 package packages
 
 import (
@@ -59,7 +60,9 @@ type Config struct {
 // Set is the packages one Load found, together with what went wrong loading
 // them.
 type Set struct {
-	// Packages holds one package per import path, sorted by it.
+	// Packages holds the packages the patterns match, the roots of the load,
+	// one per import path, sorted by it. What they import is loaded too, but
+	// is not among them.
 	Packages []*Package
 
 	// Fset is the file set every package was parsed with.
@@ -77,13 +80,16 @@ type Set struct {
 }
 
 // mode is what every generator reads; Config.TypesInfo and Config.Deps add to
-// it.
+// it. The module and the sizes, which the load has anyway, let Recheck
+// type-check as the load did.
 const mode = packages.NeedName |
 	packages.NeedFiles |
 	packages.NeedCompiledGoFiles |
 	packages.NeedImports |
 	packages.NeedTypes |
-	packages.NeedSyntax
+	packages.NeedSyntax |
+	packages.NeedModule |
+	packages.NeedTypesSizes
 
 // Load loads the packages matching patterns, which the go command matches as it
 // always does; no patterns means the package in Dir. The error reports that the

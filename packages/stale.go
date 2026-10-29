@@ -106,6 +106,11 @@ func misnamedFiles(set Set) []staleFile {
 			want []string
 		)
 		for _, f := range p.Syntax {
+			// One that does not parse as far as its package clause declares no
+			// package to tell.
+			if f.Package == token.NoPos {
+				continue
+			}
 			path := p.Fset.Position(f.Pos()).Filename
 			if generated[path] {
 				own = append(own, staleFile{path: path, pkg: f.Name.Name})

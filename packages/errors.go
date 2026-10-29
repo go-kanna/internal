@@ -73,6 +73,12 @@ func diagnosePackage(p *Package, dir string) []diag.Diag {
 		case e.Kind == packages.TypeError:
 			source = append(source, diag.Errorf(pos, "%s", e.Msg))
 		default:
+			// The go command names a file relative to dir, where it ran, as
+			// when a file does not parse as far as its package clause, which
+			// go/parser reports again by its absolute path.
+			if pos.Filename != "" && !filepath.IsAbs(pos.Filename) {
+				pos.Filename = filepath.Join(dir, pos.Filename)
+			}
 			listed = append(listed, diag.Errorf(pos, "%s", e.Msg))
 		}
 	}

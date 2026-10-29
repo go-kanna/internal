@@ -60,7 +60,9 @@ type Config struct {
 // Set is the packages one Load found, together with what went wrong loading
 // them.
 type Set struct {
-	// Packages holds one package per import path, sorted by it.
+	// Packages holds the packages the patterns match, the roots of the load,
+	// one per import path, sorted by it. What they import is loaded too, but
+	// is not among them.
 	Packages []*Package
 
 	// Fset is the file set every package was parsed with.

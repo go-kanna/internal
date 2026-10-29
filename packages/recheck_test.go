@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/go-kanna/internal/diag"
@@ -32,7 +33,7 @@ func TestRecheck(t *testing.T) {
 	tests := []struct {
 		name    string
 		files   map[string]string
-		pattern string
+		pattern string // patterns, separated by spaces
 		tests   bool
 		write   map[string]string // by path in the module
 		remove  []string
@@ -170,6 +171,46 @@ func TestRecheck(t *testing.T) {
 			},
 		},
 		{
+			// q passes to r, which is not a root, a T of p checked again.
+			name: "a package between two roots",
+			files: map[string]string{
+				"p/p.go": "package p\n\ntype T struct{}\n",
+				"r/r.go": "package r\n\nimport \"example.com/m/p\"\n\nfunc Take(p.T) {}\n",
+				"q/q.go": "package q\n\nimport (\n\t\"example.com/m/p\"\n\t\"example.com/m/r\"\n)\n\n" +
+					"var _ int = p.F()\n\nfunc f() { r.Take(p.T{}) }\n",
+			},
+			pattern: "./p ./q",
+			write:   map[string]string{"p/x_gen.go": genF},
+		},
+		{
+			// q, which imports r, is not reported on.
+			name: "a package between two roots that the changes break",
+			files: map[string]string{
+				"p/p.go":     "package p\n",
+				"p/x_gen.go": genF,
+				"r/r.go": "package r\n\nimport \"example.com/m/p\"\n\nvar V = p.F\n\n" +
+					"func g() int { return p.F() }\n",
+				"q/q.go": "package q\n\nimport \"example.com/m/r\"\n\nvar _ = r.V()\n",
+			},
+			pattern: "./p ./q",
+			remove:  []string{"p/x_gen.go"},
+			want:    []string{"r/r.go:5:11: error: undefined: p.F", "r/r.go:7:25: error: undefined: p.F"},
+		},
+		{
+			// x_test imports r as built for the tests of p, against the test
+			// variant.
+			name: "an external test importing a package that imports the one it tests",
+			files: map[string]string{
+				"p/p.go":      "package p\n\ntype T struct{}\n",
+				"p/p_test.go": "package p\n",
+				"p/x_test.go": "package p_test\n\nimport (\n\t\"example.com/m/p\"\n\t\"example.com/m/r\"\n)\n\n" +
+					"func f() { r.Take(p.T{}) }\n",
+				"r/r.go": "package r\n\nimport \"example.com/m/p\"\n\nfunc Take(p.T) {}\n",
+			},
+			pattern: "./...",
+			tests:   true,
+		},
+		{
 			name: "the go version of the module",
 			files: map[string]string{
 				"go.mod": "module example.com/m\n\ngo 1.21\n",
@@ -187,8 +228,8 @@ func TestRecheck(t *testing.T) {
 			t.Parallel()
 
 			dir := module(t, tt.files)
-			pattern := cmp.Or(tt.pattern, "./p")
-			set := load(t, []string{pattern}, packages.Config{Dir: dir, Tests: tt.tests})
+			patterns := strings.Fields(cmp.Or(tt.pattern, "./p"))
+			set := load(t, patterns, packages.Config{Dir: dir, Tests: tt.tests})
 			if blocking, _ := set.Split(); diag.HasErrors(blocking) {
 				t.Fatalf("Split() blocks on %v", blocking)
 			}

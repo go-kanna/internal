@@ -15,17 +15,19 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/tools/go/packages"
+
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/output"
 )
 
-// Recheck type-checks the root packages of set again, in memory, as they are
-// once changes are applied: a file written takes the place of the one at its
-// path, or joins the package of its directory that its package clause names,
-// and a file removed leaves its package. It runs no go command. A run can thus
-// tell, before it writes anything, whether the code calling what it writes
-// compiles, which includes what go/types could not check before: the rest of
-// an expression whose operand is undefined.
+// Recheck type-checks the roots of set, set.Packages, again, in memory, as
+// they are once changes are applied: a file written takes the place of the one
+// at its path, or joins the package of its directory that its package clause
+// names, and a file removed leaves its package. It runs no go command. A run
+// can thus tell, before it writes anything, whether the code calling what it
+// writes compiles, which includes what go/types could not check before: the
+// rest of an expression whose operand is undefined.
 //
 // Every root is checked again, as one the run writes nothing into may call one
 // it does, in import order, each importing those checked before it. A test
@@ -40,10 +42,10 @@ import (
 // again by its own generator in the same go generate. A file of changes that
 // does not parse is reported alone.
 //
-// A package that is not a root but imports one keeps the types of the root as
-// loaded, which differ from those checked again, and an error may come of it.
-// It takes patterns that leave out a package between two roots, or an external
-// test importing a package that imports the one it tests.
+// A package of the load that is not a root but imports one, such as b when
+// the patterns name a and c of c → b → a, is checked again too, as the types
+// it shares with the roots would otherwise not be those checked again. The
+// load read it from source for the same reason.
 func Recheck(set Set, changes []output.Change) []diag.Diag {
 	outputs := make(map[string]*ast.File, len(changes)) // nil for a file removed
 	var ds []diag.Diag
@@ -76,12 +78,23 @@ func Recheck(set Set, changes []output.Change) []diag.Diag {
 	for path := range outputs {
 		r.skip[path] = true
 	}
+	roots := make(map[string]bool, len(set.Packages))
 	for _, p := range set.Packages {
+		roots[p.ID] = true
 		r.add(p, p.ID, isTestVariant(p), outputs)
 		if isTestVariant(p) {
 			r.add(p, p.PkgPath, false, outputs)
 		}
 	}
+	packages.Visit(set.Packages, nil, func(p *Package) {
+		if roots[p.ID] || r.units[p.ID] != nil || len(p.Syntax) == 0 ||
+			!slices.ContainsFunc(slices.Collect(maps.Values(p.Imports)), func(imp *Package) bool {
+				return r.units[imp.ID] != nil
+			}) {
+			return
+		}
+		r.add(p, p.ID, isTestVariant(p), outputs)
+	})
 	for _, id := range slices.Sorted(maps.Keys(r.units)) {
 		r.check(id)
 	}
@@ -97,8 +110,8 @@ func Recheck(set Set, changes []output.Change) []diag.Diag {
 	return slices.CompactFunc(r.ds, func(a, b diag.Diag) bool { return a.Pos == b.Pos && a.Message == b.Message })
 }
 
-// unit is a package Recheck checks again: a root, or a test variant built
-// without its tests.
+// unit is a package Recheck checks again: a root, a test variant built without
+// its tests, or a package of the load that is not a root but imports one.
 type unit struct {
 	pkg   *Package
 	files []*ast.File

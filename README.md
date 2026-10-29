@@ -18,8 +18,8 @@ and a minor release may break the one before it.
 - [`gofile`](./gofile): assembles one generated file, naming its imports and locals so that none collide.
 - [`output`](./output): writes, removes, or checks what a run generated, never touching a hand-written file, and
   reads what the destination already declares and requires.
-- [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, and reports
-  what went wrong as diagnostics.
+- [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, reports
+  what went wrong as diagnostics, and type-checks them again as they are once what a run writes is in place.
 - [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk, and compares what a
   generator generates with golden files.
 - [`scan`](./scan): reads the struct types a package declares.

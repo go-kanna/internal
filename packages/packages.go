@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/go-kanna/internal/diag"
+	"github.com/go-kanna/internal/output"
 )
 
 // Package is the go/packages type itself, so that callers need not import both.
@@ -183,11 +185,24 @@ func isTestVariant(p *Package) bool {
 
 // GeneratedFiles returns the files of pkg that carry the "Code generated ...
 // DO NOT EDIT." marker, by absolute path.
+//
+// A file that does not parse as far as its package clause, as one whose marker
+// a merge left in conflict, is read again and told as output.IsGenerated tells
+// it, for its generator to write it again.
 func GeneratedFiles(pkg *Package) map[string]bool {
 	files := make(map[string]bool)
 	for _, f := range pkg.Syntax {
-		if ast.IsGenerated(f) {
-			files[pkg.Fset.Position(f.Pos()).Filename] = true
+		tf := pkg.Fset.File(f.FileStart)
+		if tf == nil {
+			continue
+		}
+		switch path := tf.Name(); {
+		case ast.IsGenerated(f):
+			files[path] = true
+		case f.Package == token.NoPos:
+			if src, err := os.ReadFile(path); err == nil && output.IsGenerated(src) { //nolint:gosec // a file of the load
+				files[path] = true
+			}
 		}
 	}
 	return files

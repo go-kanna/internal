@@ -11,7 +11,8 @@ package valuetype
 import (
 	"go/token"
 	"go/types"
-	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Type is a value type.
@@ -97,6 +98,9 @@ func constructor(named *types.Named, held types.Type) *types.Func {
 	return fn
 }
 
+// upperFirst capitalizes the first letter of s, which may take more than one
+// byte, as the é of éclair does.
 func upperFirst(s string) string {
-	return strings.ToUpper(s[:1]) + s[1:]
+	r, size := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[size:]
 }

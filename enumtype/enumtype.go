@@ -9,10 +9,10 @@
 package enumtype
 
 import (
-	"go/token"
 	"go/types"
 	"slices"
-	"strings"
+
+	"github.com/go-kanna/internal/valuetype"
 )
 
 // Type is an enum.
@@ -60,12 +60,12 @@ func Constants(named *types.Named) []*types.Const {
 }
 
 // Funcs names the functions generated for an enum named name, exported as the
-// type is: NewX and XValues, or newX and xValues for an unexported x.
+// type is: NewX and XValues, or newX and xValues for an unexported x. The
+// constructor is named as a value type's is, so that a generator finds either
+// by the one rule.
 func Funcs(name string) (newFunc, valuesFunc string) {
-	if token.IsExported(name) {
-		return "New" + name, name + "Values"
-	}
-	return "new" + strings.ToUpper(name[:1]) + name[1:], name + "Values"
+	newFunc, _ = valuetype.Constructors(name)
+	return newFunc, name + "Values"
 }
 
 // constructor returns the constructor of named from what is loaded of the

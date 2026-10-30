@@ -15,6 +15,8 @@ and a minor release may break the one before it.
 - [`cli`](./cli): runs a generator as a command, with the flags, reporting, and exit codes every generator shares.
 - [`diag`](./diag): the problems a generator reports, each tied to a source position.
 - [`directive`](./directive): finds the `//kanna:<key>` comments that mark a declaration for a generator.
+- [`enumtype`](./enumtype): knows the enums kanna-value generates by their shape, and names the functions it generates
+  for them, for kanna-value and the generators reading its types alike.
 - [`gofile`](./gofile): assembles one generated file, naming its imports and locals so that none collide.
 - [`output`](./output): writes, removes, or checks what a run generated, never touching a hand-written file, and
   reads what the destination already declares and requires.

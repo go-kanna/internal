@@ -22,7 +22,7 @@ and a minor release may break the one before it.
   what went wrong as diagnostics, and type-checks them again as they are once what a run writes is in place.
 - [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk, and compares what a
   generator generates with golden files.
-- [`scan`](./scan): reads the struct types a package declares.
+- [`scan`](./scan): reads the types a package declares, and the fields of its structs.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
 - [`valuetype`](./valuetype): knows the value types kanna-value generates by their shape, and names their accessor and
   constructors, for kanna-value and the generators reading its types alike.

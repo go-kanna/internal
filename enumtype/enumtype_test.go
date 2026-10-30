@@ -135,6 +135,7 @@ func TestFuncs(t *testing.T) {
 	for _, tt := range []struct{ name, newFunc, valuesFunc string }{
 		{name: "OrderStatus", newFunc: "NewOrderStatus", valuesFunc: "OrderStatusValues"},
 		{name: "orderStatus", newFunc: "newOrderStatus", valuesFunc: "orderStatusValues"},
+		{name: "état", newFunc: "newÉtat", valuesFunc: "étatValues"},
 	} {
 		if newFunc, valuesFunc := enumtype.Funcs(tt.name); newFunc != tt.newFunc || valuesFunc != tt.valuesFunc {
 			t.Errorf("Funcs(%q) = %q, %q; want %q, %q", tt.name, newFunc, valuesFunc, tt.newFunc, tt.valuesFunc)

@@ -27,6 +27,8 @@ func NewEmail(s string) (Email, error) { return Email{s: s}, nil }
 
 type cents int64
 
+type ünits int64
+
 type price struct{ c cents }
 
 func (p price) Cents() cents { return p.c }
@@ -157,6 +159,7 @@ func TestAccessor(t *testing.T) {
 		{held: types.Universe.Lookup("byte").Type(), want: "Byte"},
 		{held: scope.Lookup("CompletedAt").Type(), want: "CompletedAt"},
 		{held: scope.Lookup("cents").Type(), want: "Cents"},
+		{held: scope.Lookup("ünits").Type(), want: "Ünits"},
 		{held: types.NewSlice(types.Typ[types.String])},
 		{held: types.NewPointer(types.Typ[types.Int])},
 	}
@@ -179,6 +182,11 @@ func TestConstructors(t *testing.T) {
 	for _, tt := range []struct{ name, newFunc, mustFunc string }{
 		{name: "Email", newFunc: "NewEmail", mustFunc: "MustEmail"},
 		{name: "price", newFunc: "newPrice", mustFunc: "mustPrice"},
+		// A letter of more than one byte is capitalized whole.
+		{name: "éclair", newFunc: "newÉclair", mustFunc: "mustÉclair"},
+		{name: "Ωmega", newFunc: "NewΩmega", mustFunc: "MustΩmega"},
+		// A letter without case stays as it is, and so unexported.
+		{name: "価格", newFunc: "new価格", mustFunc: "must価格"}, //nolint:gosmopolitan // a script without case is the case tested
 	} {
 		if newFunc, mustFunc := valuetype.Constructors(tt.name); newFunc != tt.newFunc || mustFunc != tt.mustFunc {
 			t.Errorf("Constructors(%q) = %q, %q; want %q, %q", tt.name, newFunc, mustFunc, tt.newFunc, tt.mustFunc)

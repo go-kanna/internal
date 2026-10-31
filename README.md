@@ -14,6 +14,8 @@ and a minor release may break the one before it.
 ## Packages
 
 - [`cli`](./cli): runs a generator as a command, with the flags, reporting, and exit codes every generator shares.
+- [`deps`](./deps): what a generator tells the `kanna` command of a run before it starts, and what the command passes
+  on to a run.
 - [`diag`](./diag): the problems a generator reports, each tied to a source position.
 - [`directive`](./directive): finds the `//kanna:<key>` comments that mark a declaration for a generator.
 - [`enumtype`](./enumtype): knows the enums kanna-value generates by their shape, and names the functions it generates

@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"errors"
 	"flag"
 	"go/token"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/go-kanna/internal/cli"
+	"github.com/go-kanna/internal/deps"
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/output"
 )
@@ -376,5 +378,56 @@ func TestExec_NoArguments(t *testing.T) {
 
 	if got := execute(t, cmd, t.TempDir(), "-tags", "a"); got.code != cli.ExitOK || !ran {
 		t.Errorf("Exec() without arguments = %+v, ran = %v, want code %d and a run", got, ran, cli.ExitOK)
+	}
+}
+
+func TestExec_Deps(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cmd := command(generates())
+	cmd.Deps = func(got string, _ config, args []string) (deps.Report, error) {
+		if got != dir {
+			t.Errorf("Deps got dir %q, want %q", got, dir)
+		}
+		return deps.Report{Packages: args, Writes: []string{"/b", "/a"}}, nil
+	}
+
+	got := execute(t, cmd, dir, "-deps", "./p")
+
+	want := `{"protocol":1,"packages":["./p"],"writes":["/a","/b"]}` + "\n"
+	if got != (result{code: cli.ExitOK, stdout: want}) {
+		t.Errorf("Exec(-deps) = %+v, want stdout %q", got, want)
+	}
+	if c := contents(t, filepath.Join(dir, "p_gen.go")); c != "" {
+		t.Errorf("-deps wrote p_gen.go: %q", c)
+	}
+}
+
+func TestExec_DepsFails(t *testing.T) {
+	t.Parallel()
+
+	cmd := command(generates())
+	cmd.Deps = func(string, config, []string) (deps.Report, error) {
+		return deps.Report{}, errors.New("cannot tell")
+	}
+
+	got := execute(t, cmd, t.TempDir(), "-deps")
+
+	want := result{code: cli.ExitFailure, err: "kanna-test: cannot tell\n"}
+	if got != want {
+		t.Errorf("Exec(-deps) = %+v, want %+v", got, want)
+	}
+}
+
+// A command without Deps refuses the flag, which is how the kanna command tells
+// a generator too old to answer.
+func TestExec_NoDeps(t *testing.T) {
+	t.Parallel()
+
+	got := execute(t, command(generates()), t.TempDir(), "-deps")
+
+	if got.code != cli.ExitUsage || !strings.Contains(got.err, "-deps") {
+		t.Errorf("Exec(-deps) = %+v, want a usage error naming the flag", got)
 	}
 }

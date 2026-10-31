@@ -51,3 +51,34 @@ jobs:
         with:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Each generator's tests, against this internal rather than the release it
+  # requires, so that a change here meets the code that uses it before a tag.
+  generators:
+    name: generators (${{ matrix.repository }})
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: [di, fixture, i18n, mapper, orm, validate, value]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: internal
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: go-kanna/${{ matrix.repository }}
+          path: generator
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: generator/go.mod
+
+      - name: Use this internal in the generator's workspace
+        working-directory: generator
+        run: go work use ../internal
+
+      - name: Run the generator's tests
+        working-directory: generator
+        run: make test

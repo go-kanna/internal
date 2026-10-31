@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"go/types"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	"github.com/go-kanna/internal/deps"
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/output"
 )
@@ -47,6 +49,16 @@ import (
 // it shares with the roots would otherwise not be those checked again. The
 // load read it from source for the same reason.
 func Recheck(set Set, changes []output.Change) []diag.Diag {
+	ds := recheck(set, changes)
+	names, err := deps.ReadPending(os.Getenv(deps.PendingEnv))
+	if err != nil {
+		return append(ds, diag.Errorf(token.Position{}, "%v", err))
+	}
+	return slices.DeleteFunc(ds, set.Pending(names))
+}
+
+// recheck is Recheck, of every error.
+func recheck(set Set, changes []output.Change) []diag.Diag {
 	outputs := make(map[string]*ast.File, len(changes)) // nil for a file removed
 	var ds []diag.Diag
 	for _, c := range changes {

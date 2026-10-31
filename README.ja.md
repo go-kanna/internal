@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![English](https://img.shields.io/badge/lang-English-blue.svg)](README.md)
 
-[kanna](https://github.com/go-kanna/kanna) コードジェネレータが共有する内部パッケージです。
+[kanna](https://go-kanna.github.io/ja/) コードジェネレータが共有する内部パッケージです。
 
 Go の internal ルールはインポートパスで適用されるので、これらのパッケージは `github.com/go-kanna/` 配下のモジュールからしかインポートできません。ここに公開 API はありません。バージョンはジェネレータの必要に応じて上がり、マイナーリリースで前のバージョンとの互換性がなくなることもあります。
 

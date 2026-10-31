@@ -151,9 +151,14 @@ func load(patterns []string, cfg Config, overlay map[string][]byte) (Set, error)
 	}
 
 	fset := token.NewFileSet()
-	pc := &packages.Config{Mode: m, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: merged}
+	pc := &packages.Config{
+		Mode: m, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: merged,
+		// Export data keeps the paths it was compiled with, and a generator may
+		// go from a type read there to the file declaring it.
+		BuildFlags: []string{"-trimpath=false"},
+	}
 	if cfg.Tags != "" {
-		pc.BuildFlags = []string{"-tags=" + cfg.Tags}
+		pc.BuildFlags = append(pc.BuildFlags, "-tags="+cfg.Tags)
 	}
 
 	pkgs, err := packages.Load(pc, patterns...)

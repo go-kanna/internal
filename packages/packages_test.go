@@ -259,6 +259,32 @@ func TestLoad_Deps(t *testing.T) {
 	}
 }
 
+// A generator goes from a type read in export data to the file declaring it,
+// which needs a path on disk whatever GOFLAGS says.
+func TestLoad_PathsOnDiskUnderTrimpath(t *testing.T) {
+	t.Setenv("GOFLAGS", "-trimpath")
+
+	dir := module(t, map[string]string{
+		"a/a.go": "package a\n\nimport \"example.com/m/b\"\n\nvar _ b.T\n",
+		"b/b.go": "package b\n\ntype T struct{}\n",
+	})
+
+	for _, tags := range []string{"", "integration"} {
+		set := load(t, []string{"./a"}, packages.Config{Dir: dir, Tags: tags})
+		if len(set.Diags) > 0 {
+			t.Fatalf("Diags = %v", set.Diags)
+		}
+		b := imported(set.Packages[0].Types, "example.com/m/b")
+		if b == nil {
+			t.Fatal("b is not among what a imports")
+		}
+		got := set.Fset.Position(b.Scope().Lookup("T").Pos()).Filename
+		if want := filepath.Join(dir, "b", "b.go"); got != want {
+			t.Errorf("with tags %q, T is declared at %q, want %q", tags, got, want)
+		}
+	}
+}
+
 // imported returns what pkg imports from path, or nil.
 func imported(pkg *types.Package, path string) *types.Package {
 	if pkg == nil {

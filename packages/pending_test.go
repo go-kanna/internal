@@ -73,6 +73,15 @@ func TestSet_Pending(t *testing.T) {
 			want:  []string{"p/p.go:7:22", "p/p.go:9:22"},
 		},
 		{
+			name: "a type switch and an assertion a method rules out",
+			files: map[string]string{
+				"p/p.go": "package p\n\ntype I interface{ M() }\n\ntype T struct{}\n\nfunc f(i I) {\n" +
+					"\tswitch i.(type) {\n\tcase T:\n\t}\n\t_ = i.(T)\n}\n",
+			},
+			names: []string{"example.com/m/p.T.M"},
+			want:  []string{"p/p.go:9:7", "p/p.go:11:6"},
+		},
+		{
 			// go/types names q.U by its package's name, whatever the file
 			// imports it as.
 			name: "a method of a type of an import",

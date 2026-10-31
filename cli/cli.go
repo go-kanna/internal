@@ -10,6 +10,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"runtime/debug"
 	"strconv"
 
+	"github.com/go-kanna/internal/deps"
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/output"
 )
@@ -66,6 +68,13 @@ type Command[C any] struct {
 	// arguments left after the flags. A diagnostic that is an error stops the
 	// run before anything is checked or written.
 	Run func(dir string, cfg C, args []string) ([]output.Change, []diag.Diag)
+
+	// Deps tells what Run would read and write, generating nothing, for the
+	// kanna command to order the run among the others. It is given what Run
+	// is given, on a tree where what other runs generate may not be there yet,
+	// so only an error it cannot tell anything past is one to return. Nil
+	// means the command has no -deps.
+	Deps func(dir string, cfg C, args []string) (deps.Report, error)
 }
 
 // Main runs the command on the command line, reporting to stdout and stderr,
@@ -79,7 +88,8 @@ func (c Command[C]) Main(args []string) int {
 // The flags every command has are -check, which compares the files with what
 // would be generated instead of writing them; -v, which lists what was written,
 // removed, or left unchanged; and -version. A run that succeeds says nothing
-// otherwise.
+// otherwise. A command with Deps has -deps too, which prints its report as JSON
+// and generates nothing.
 func (c Command[C]) Exec(env Env, args []string) int {
 	fs := flag.NewFlagSet(c.Name, flag.ContinueOnError)
 	fs.SetOutput(env.Err)
@@ -88,13 +98,16 @@ func (c Command[C]) Exec(env Env, args []string) int {
 	fs.Usage = func() {}
 
 	var (
-		cfg                     C
-		check, verbose, version bool
+		cfg                           C
+		check, verbose, version, plan bool
 	)
 	fs.BoolVar(&check, "check", false,
 		"check that the generated files are up to date instead of writing them; KANNA_CHECK=1 does the same")
 	fs.BoolVar(&verbose, "v", false, "list the files written, removed, or left unchanged")
 	fs.BoolVar(&version, "version", false, "print the version and exit")
+	if c.Deps != nil {
+		fs.BoolVar(&plan, "deps", false, "print what a run reads and writes as JSON, for the kanna command, and exit")
+	}
 	if c.Flags != nil {
 		c.Flags(fs, &cfg)
 	}
@@ -134,6 +147,10 @@ func (c Command[C]) Exec(env Env, args []string) int {
 		return ExitFailure
 	}
 
+	if plan {
+		return c.answerDeps(env, dir, cfg, fs.Args())
+	}
+
 	changes, ds := c.Run(dir, cfg, fs.Args())
 	diag.Write(env.Err, dir, ds)
 	if diag.HasErrors(ds) {
@@ -154,6 +171,22 @@ func (c Command[C]) Exec(env Env, args []string) int {
 	}
 	diag.Write(env.Err, dir, ds)
 	return exitCode(ds)
+}
+
+// answerDeps prints the report of a run in dir, for -deps.
+func (c Command[C]) answerDeps(env Env, dir string, cfg C, args []string) int {
+	r, err := c.Deps(dir, cfg, args)
+	if err != nil {
+		fmt.Fprintf(env.Err, "%s: %v\n", c.Name, err)
+		return ExitFailure
+	}
+	r.Protocol = deps.Protocol
+	r.Sort()
+	if err := json.NewEncoder(env.Out).Encode(r); err != nil {
+		fmt.Fprintf(env.Err, "%s: %v\n", c.Name, err)
+		return ExitFailure
+	}
+	return ExitOK
 }
 
 func (c Command[C]) usage(w io.Writer, fs *flag.FlagSet) {

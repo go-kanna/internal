@@ -26,6 +26,14 @@ var (
 		regexp.MustCompile(`: \*?(\S+) does not (?:implement|satisfy) .*\((?:missing|wrong type for) method (\w+)\)`),
 	}
 
+	// assertForms are the type errors about a type a type switch or a type
+	// assertion cannot have for want of a method, which they name on the line
+	// after the first.
+	assertForms = []*regexp.Regexp{
+		regexp.MustCompile(`cannot have dynamic type \*?(\S+) \((?:missing|wrong type for) method (\w+)\)`),
+		regexp.MustCompile(`\n\s*\*?(\S+) does not implement .*\((?:missing|wrong type for) method (\w+)\)`),
+	}
+
 	unusedImport = regexp.MustCompile(`^("[^"]+") imported and not used$`)
 )
 
@@ -36,9 +44,10 @@ var (
 //
 // The error is told by its message: an undefined function, a call to one with
 // the wrong arguments or results, a type that has no such method or misses one
-// an interface asks for, or a dot import used by nothing but calls to such
-// functions. A generator that stops before Recheck can tell leaves those out of
-// the errors it reports along with its own: they say nothing of what is wrong.
+// an interface asks for, a type switch or assertion ruled out by such a method,
+// or a dot import used by nothing but calls to such functions. A generator that
+// stops before Recheck can tell leaves those out of the errors it reports along
+// with its own: they say nothing of what is wrong.
 func (s Set) Pending(names map[string]bool) func(diag.Diag) bool {
 	files := make(map[string]source)
 	for _, p := range s.Packages {
@@ -61,10 +70,15 @@ func (s Set) Pending(names map[string]bool) func(diag.Diag) bool {
 				}
 			}
 		}
-		for _, re := range methodForms {
-			if m := re.FindStringSubmatch(first); m != nil {
-				if t := src.typeName(m[1]); t != "" && names[t+"."+m[2]] {
-					return true
+		for _, form := range []struct {
+			res []*regexp.Regexp
+			in  string
+		}{{methodForms, first}, {assertForms, d.Message}} {
+			for _, re := range form.res {
+				if m := re.FindStringSubmatch(form.in); m != nil {
+					if t := src.typeName(m[1]); t != "" && names[t+"."+m[2]] {
+						return true
+					}
 				}
 			}
 		}

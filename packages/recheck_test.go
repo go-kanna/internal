@@ -2,11 +2,13 @@ package packages_test
 
 import (
 	"cmp"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/go-kanna/internal/deps"
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/output"
 	"github.com/go-kanna/internal/packages"
@@ -246,5 +248,35 @@ func TestRecheck(t *testing.T) {
 				t.Errorf("Recheck() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// What is still to come in a kanna gen is no error of this run, and anything
+// else still is. It sets the environment, so it does not run in parallel.
+func TestRecheck_Pending(t *testing.T) {
+	dir := module(t, map[string]string{"p/p.go": "package p\n\nvar _ = F()\n\nvar _ = G()\n"})
+	set := load(t, []string{"./p"}, packages.Config{Dir: dir})
+
+	names := filepath.Join(dir, "pending")
+	if err := os.WriteFile(names, []byte("example.com/m/p.F\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(deps.PendingEnv, names)
+
+	got := report(dir, packages.Recheck(set, nil))
+	want := []string{"p/p.go:5:9: error: undefined: G"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Recheck() = %q, want %q", got, want)
+	}
+}
+
+func TestRecheck_PendingUnreadable(t *testing.T) {
+	dir := module(t, map[string]string{"p/p.go": "package p\n"})
+	set := load(t, []string{"./p"}, packages.Config{Dir: dir})
+
+	t.Setenv(deps.PendingEnv, filepath.Join(dir, "gone"))
+
+	if ds := packages.Recheck(set, nil); !diag.HasErrors(ds) {
+		t.Errorf("Recheck() = %v, want an error for a file it cannot read", ds)
 	}
 }

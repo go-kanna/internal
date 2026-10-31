@@ -195,11 +195,14 @@ func isTestVariant(p *Package) bool {
 	return p.ID != p.PkgPath
 }
 
-// Paths returns the import paths of the packages of s, sorted.
+// Paths returns the import paths of the packages of s, sorted. An external test
+// package goes with the package it tests, which nothing can import it as.
 func (s Set) Paths() []string {
-	paths := make([]string, len(s.Packages))
-	for i, p := range s.Packages {
-		paths[i] = p.PkgPath
+	paths := make([]string, 0, len(s.Packages))
+	for _, p := range s.Packages {
+		if !isTestVariant(p) || !strings.HasSuffix(p.Name, "_test") {
+			paths = append(paths, p.PkgPath)
+		}
 	}
 	return paths
 }

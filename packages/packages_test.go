@@ -314,6 +314,19 @@ func TestSet_Paths(t *testing.T) {
 	}
 }
 
+func TestSet_Paths_ExternalTests(t *testing.T) {
+	t.Parallel()
+
+	dir := module(t, map[string]string{"a/a.go": "package a\n", "a/x_test.go": "package a_test\n"})
+
+	set := load(t, []string{"./a"}, packages.Config{Dir: dir, Tests: true})
+
+	want := []string{"example.com/m/a"}
+	if got := set.Paths(); !slices.Equal(got, want) {
+		t.Errorf("Paths() = %v, want %v", got, want)
+	}
+}
+
 func TestLoad_Diags(t *testing.T) {
 	t.Parallel()
 

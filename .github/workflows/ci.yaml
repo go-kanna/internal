@@ -71,9 +71,11 @@ jobs:
           repository: go-kanna/${{ matrix.repository }}
           path: generator
 
+      # The workspace's Go, which an example may ask a newer one of than the
+      # generator's module does.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: generator/go.mod
+          go-version-file: generator/go.work
 
       - name: Use this internal in the generator's workspace
         working-directory: generator

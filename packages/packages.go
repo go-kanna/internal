@@ -57,6 +57,11 @@ type Config struct {
 	// there whichever generator wrote it. A hand-written file is never set
 	// aside, even under a name given here: it is not the caller's to replace.
 	Regenerated []string
+
+	// Overlay names files by absolute path, each read as holding what is given
+	// here and not what is on disk, for a caller who wants to read packages as
+	// they would be with those files changed. What the disk holds stays.
+	Overlay map[string][]byte
 }
 
 // Set is the packages one Load found, together with what went wrong loading
@@ -138,8 +143,15 @@ func load(patterns []string, cfg Config, overlay map[string][]byte) (Set, error)
 	if cfg.Deps {
 		m |= packages.NeedDeps
 	}
+	merged := maps.Clone(cfg.Overlay)
+	if merged == nil {
+		merged = overlay
+	} else {
+		maps.Copy(merged, overlay)
+	}
+
 	fset := token.NewFileSet()
-	pc := &packages.Config{Mode: m, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: overlay}
+	pc := &packages.Config{Mode: m, Dir: dir, Fset: fset, Tests: cfg.Tests, Overlay: merged}
 	if cfg.Tags != "" {
 		pc.BuildFlags = []string{"-tags=" + cfg.Tags}
 	}
@@ -181,6 +193,15 @@ func onePerPath(pkgs []*Package) []*Package {
 // go/packages shows in its ID: "example.com/p [example.com/p.test]".
 func isTestVariant(p *Package) bool {
 	return p.ID != p.PkgPath
+}
+
+// Paths returns the import paths of the packages of s, sorted.
+func (s Set) Paths() []string {
+	paths := make([]string, len(s.Packages))
+	for i, p := range s.Packages {
+		paths[i] = p.PkgPath
+	}
+	return paths
 }
 
 // GeneratedFiles returns the files of pkg that carry the "Code generated ...

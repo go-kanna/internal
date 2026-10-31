@@ -286,6 +286,34 @@ func uses(pkg *packages.Package, name string) []string {
 	return out
 }
 
+func TestLoad_Overlay(t *testing.T) {
+	t.Parallel()
+
+	dir := module(t, map[string]string{"p/p.go": "package p\n\nvar V = 1\n", "p/q.go": "package p\n\nvar W = V\n"})
+
+	set := load(t, []string{"./p"}, packages.Config{
+		Dir:     dir,
+		Overlay: map[string][]byte{filepath.Join(dir, "p", "p.go"): []byte("package p\n")},
+	})
+
+	if got, want := where(t, dir, set.Diags), []string{"p/q.go:3:9"}; !slices.Equal(got, want) {
+		t.Errorf("Diags at %q, want %q, as the overlay leaves V undefined\n%v", got, want, set.Diags)
+	}
+}
+
+func TestSet_Paths(t *testing.T) {
+	t.Parallel()
+
+	dir := module(t, map[string]string{"b/b.go": "package b\n", "a/a.go": "package a\n"})
+
+	set := load(t, []string{"./..."}, packages.Config{Dir: dir})
+
+	want := []string{"example.com/m/a", "example.com/m/b"}
+	if got := set.Paths(); !slices.Equal(got, want) {
+		t.Errorf("Paths() = %v, want %v", got, want)
+	}
+}
+
 func TestLoad_Diags(t *testing.T) {
 	t.Parallel()
 

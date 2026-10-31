@@ -89,22 +89,34 @@ func Check(changes []Change) []diag.Diag {
 	return ds
 }
 
-// Apply makes changes, stopping at the first that fails. A file already
-// holding what it would be given is left alone, as is a file to be removed
-// that is already gone.
+// Apply makes changes, stopping at the first that fails. Every change is
+// checked before any is made, so that a file it may not touch, or cannot read,
+// stops the run with nothing written. A file already holding what it would be
+// given is left alone, as is a file to be removed that is already gone. A file
+// is written whole or not at all, never left holding a part of what it was to
+// be given.
 func Apply(changes []Change) ([]Applied, []diag.Diag) {
-	done := make([]Applied, 0, len(changes))
-	for _, c := range changes {
-		action, err := apply(c)
+	actions := make([]Action, len(changes))
+	for i, c := range changes {
+		action, err := actionOf(c)
 		if err != nil {
+			return nil, []diag.Diag{diag.Errorf(token.Position{Filename: c.Path}, "%v", err)}
+		}
+		actions[i] = action
+	}
+
+	done := make([]Applied, 0, len(changes))
+	for i, c := range changes {
+		if err := apply(c, actions[i]); err != nil {
 			return done, []diag.Diag{diag.Errorf(token.Position{Filename: c.Path}, "%v", err)}
 		}
-		done = append(done, Applied{Path: c.Path, Action: action})
+		done = append(done, Applied{Path: c.Path, Action: actions[i]})
 	}
 	return done, nil
 }
 
-func apply(c Change) (Action, error) {
+// actionOf tells what applying c does to its file, or why it may not.
+func actionOf(c Change) (Action, error) {
 	existing, err := os.ReadFile(filepath.Clean(c.Path))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -118,18 +130,57 @@ func apply(c Change) (Action, error) {
 	case !IsGenerated(existing):
 		return 0, errors.New(handWritten)
 	}
-
 	if c.Remove {
-		return Removed, pathless(os.Remove(c.Path))
+		return Removed, nil
+	}
+	return Wrote, nil
+}
+
+// apply makes c, which actionOf says does action.
+func apply(c Change, action Action) error {
+	switch action {
+	case Unchanged:
+		return nil
+	case Removed:
+		return pathless(os.Remove(c.Path))
+	case Wrote:
 	}
 	// Generated source is read like the rest of the package, so it gets the
 	// modes gofmt and go generate leave files and directories with.
 	//nolint:gosec // see above
 	if err := os.MkdirAll(filepath.Dir(c.Path), 0o755); err != nil {
-		return 0, pathless(err)
+		return pathless(err)
 	}
-	//nolint:gosec // see above
-	return Wrote, pathless(os.WriteFile(c.Path, c.Data, 0o644))
+	return pathless(writeFile(c.Path, c.Data))
+}
+
+// writeFile writes data to path through a temporary file beside it, renamed
+// over path once written whole, so that path holds what it held or data, and
+// never a part of data, for a reader or after a failure. The temporary file's
+// name starts with a dot, which the go command ignores, should it be left.
+func writeFile(path string, data []byte) (err error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err //nolint:wrapcheck // a *fs.PathError, which names the file
+	}
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err //nolint:wrapcheck // a *fs.PathError, which names the file
+	}
+	// See apply for the mode.
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return err //nolint:wrapcheck // a *fs.PathError, which names the file
+	}
+	if err := tmp.Close(); err != nil {
+		return err //nolint:wrapcheck // a *fs.PathError, which names the file
+	}
+	return os.Rename(tmp.Name(), path) //nolint:wrapcheck // a *os.LinkError, which names the files
 }
 
 // IsGenerated reports whether src carries the generated-code marker, read the

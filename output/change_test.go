@@ -290,3 +290,55 @@ func TestAction_String(t *testing.T) {
 		t.Errorf("String() = %q, want %q", got, want)
 	}
 }
+
+// Every change is checked before any is made: a hand-written file after one
+// that could be written stops the run with nothing written at all.
+func TestApply_ChecksEveryChangeFirst(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first_gen.go")
+	hand := put(t, dir, map[string]string{"p_gen.go": handwritten})
+
+	done, ds := output.Apply([]output.Change{
+		{Path: first, Data: []byte(regenerate)},
+		{Path: hand, Data: []byte(regenerate)},
+	})
+
+	if got := messages(ds); !slices.Equal(got, []string{handWrittenMsg}) {
+		t.Errorf("Apply() = %q, want the hand-written refusal", got)
+	}
+	if _, ok := read(t, first); ok || len(done) > 0 {
+		t.Errorf("Apply() wrote %v before meeting the hand-written file", done)
+	}
+}
+
+// A file is written through a temporary file renamed over it, which leaves
+// nothing beside it, and the mode generated source has.
+func TestApply_WritesThroughATemporaryFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := put(t, dir, map[string]string{"p_gen.go": generated})
+
+	if _, ds := output.Apply([]output.Change{{Path: path, Data: []byte(regenerate)}}); len(ds) > 0 {
+		t.Fatalf("Apply() = %q", messages(ds))
+	}
+	if got, _ := read(t, path); got != regenerate {
+		t.Errorf("the file holds %q, want %q", got, regenerate)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("the directory holds %d files, want the one written alone", len(entries))
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o644 {
+		t.Errorf("mode = %v, want 0644", mode)
+	}
+}

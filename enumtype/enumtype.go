@@ -9,21 +9,18 @@
 package enumtype
 
 import (
+	"cmp"
+	"go/token"
 	"go/types"
 	"slices"
+	"strings"
 
 	"github.com/go-kanna/internal/valuetype"
 )
 
-// Type is an enum.
+// Type is an enum. Its constants are what Constants returns.
 type Type struct {
 	Named *types.Named
-
-	// Constants are the constants of the type declared in its package, in the
-	// order they are declared, as far as what is loaded of the package tells:
-	// the export data of a package seen only through another carries its
-	// exported constants, but not necessarily the unexported ones.
-	Constants []*types.Const
 
 	// Constructor makes a value of the type from a string, NewX(string) (X,
 	// error), or nil when what is loaded of the package declaring the type
@@ -38,16 +35,33 @@ func Of(t types.Type) (Type, bool) {
 	if !ok || named.TypeParams().Len() > 0 || !types.Identical(named.Underlying(), types.Typ[types.String]) {
 		return Type{}, false
 	}
-	consts := Constants(named)
-	if len(consts) == 0 {
+	if len(declared(named)) == 0 {
 		return Type{}, false
 	}
-	return Type{Named: named, Constants: consts, Constructor: constructor(named)}, true
+	return Type{Named: named, Constructor: constructor(named)}, true
 }
 
 // Constants returns the constants of type named declared in its package, in
-// the order they are declared.
-func Constants(named *types.Named) []*types.Const {
+// the order they are declared: file by file in name order, as the go command
+// lists them, and from the top of each. fset is what the package was loaded
+// into. What is loaded of the package is all there is to go by: the export data
+// of a package seen only through another carries its exported constants, but
+// not necessarily the unexported ones, nor which of those on one line comes
+// first.
+func Constants(named *types.Named, fset *token.FileSet) []*types.Const {
+	consts := declared(named)
+	// Positions alone do not order the files: go/packages parses them
+	// concurrently, so they take their place in fset in any order.
+	slices.SortStableFunc(consts, func(a, b *types.Const) int {
+		pa, pb := fset.Position(a.Pos()), fset.Position(b.Pos())
+		return cmp.Or(strings.Compare(pa.Filename, pb.Filename), cmp.Compare(pa.Offset, pb.Offset))
+	})
+	return consts
+}
+
+// declared returns the constants of type named declared in its package, in name
+// order.
+func declared(named *types.Named) []*types.Const {
 	pkg := named.Obj().Pkg()
 	var consts []*types.Const
 	for _, name := range pkg.Scope().Names() {
@@ -55,7 +69,6 @@ func Constants(named *types.Named) []*types.Const {
 			consts = append(consts, c)
 		}
 	}
-	slices.SortFunc(consts, func(a, b *types.Const) int { return int(a.Pos() - b.Pos()) })
 	return consts
 }
 

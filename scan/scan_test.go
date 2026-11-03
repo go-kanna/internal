@@ -245,6 +245,20 @@ func TestStructs_Position(t *testing.T) {
 	}
 }
 
+// A type knows the file declaring it, whose imports say what its tags name.
+func TestStructs_File(t *testing.T) {
+	t.Parallel()
+
+	got := find(t, structs(t, map[string]string{
+		"a.go": "package p\n\ntype A struct{}\n",
+		"b.go": "package p\n\nimport _ \"embed\"\n\ntype B struct{}\n",
+	}), "B")
+
+	if got.File == nil || len(got.File.Imports) != 1 || got.File.Imports[0].Path.Value != `"embed"` {
+		t.Errorf("File of B = %v, want b.go, which imports embed", got.File)
+	}
+}
+
 func TestTypes(t *testing.T) {
 	t.Parallel()
 

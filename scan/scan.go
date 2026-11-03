@@ -35,6 +35,10 @@ type Struct struct {
 	// type in it, so it stands in only for a group of one.
 	Doc *ast.CommentGroup
 
+	// File is the file declaring the type, whose imports say what a tag of it
+	// names: see package qualifier.
+	File *ast.File
+
 	// Fields holds every field in declaration order, unexported, embedded, and
 	// blank ones included.
 	Fields []Field
@@ -56,6 +60,9 @@ type Type struct {
 
 	// Doc is the comment on the declaration, or nil, as for a Struct.
 	Doc *ast.CommentGroup
+
+	// File is the file declaring the type, as for a Struct.
+	File *ast.File
 }
 
 // Field is one field of a Struct.
@@ -136,7 +143,7 @@ func declared(pkgs []*packages.Package, generated bool) []decl {
 					continue
 				}
 				for _, spec := range gd.Specs {
-					if t, ok := typeOf(pkg, gd, spec); ok {
+					if t, ok := typeOf(pkg, file, gd, spec); ok {
 						decls = append(decls, decl{Type: t, pkg: pkg})
 					}
 				}
@@ -146,9 +153,9 @@ func declared(pkgs []*packages.Package, generated bool) []decl {
 	return decls
 }
 
-// typeOf reads spec, one of the specs of gd, as a Type, reporting false when it
-// declares an alias.
-func typeOf(pkg *packages.Package, gd *ast.GenDecl, spec ast.Spec) (Type, bool) {
+// typeOf reads spec, one of the specs of gd in file, as a Type, reporting false
+// when it declares an alias.
+func typeOf(pkg *packages.Package, file *ast.File, gd *ast.GenDecl, spec ast.Spec) (Type, bool) {
 	ts, ok := spec.(*ast.TypeSpec)
 	if !ok || ts.Assign.IsValid() {
 		return Type{}, false
@@ -174,6 +181,7 @@ func typeOf(pkg *packages.Package, gd *ast.GenDecl, spec ast.Spec) (Type, bool) 
 		Named:   named,
 		Pos:     pkg.Fset.Position(obj.Pos()),
 		Doc:     doc,
+		File:    file,
 	}, true
 }
 
@@ -204,6 +212,7 @@ func structOf(d decl) (Struct, bool) {
 		Named:   d.Named,
 		Pos:     d.Pos,
 		Doc:     d.Doc,
+		File:    d.File,
 		Fields:  fields,
 	}, true
 }

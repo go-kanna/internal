@@ -64,9 +64,9 @@ type Report struct {
 
 // Ref is a package a run reads because something names it.
 type Ref struct {
-	// Package is the package as it is named: by import path, by the end of
-	// one, or by its name, which is all there is to tell one that holds
-	// nothing but generated code before it is generated.
+	// Package is the import path of the package, which the file naming it
+	// imports, or, for one that holds nothing but generated code, will have
+	// once it is generated.
 	Package string `json:"package"`
 
 	// Via says what names it, as written, such as with=postgres.NewTodo.

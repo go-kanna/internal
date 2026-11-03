@@ -36,6 +36,10 @@ func TestLoad(t *testing.T) {
 	for id, obj := range pkg.TypesInfo.Uses {
 		if obj.Pkg() != nil && obj.Pkg().Path() == "time" {
 			fromTime = append(fromTime, id.Name)
+			// What is imported has its positions in the same file set.
+			if got := pkg.Fset.Position(obj.Pos()).Filename; !strings.HasSuffix(got, "time/time.go") {
+				t.Errorf("time.%s is declared at %q, want time/time.go", id.Name, got)
+			}
 		}
 	}
 	if want := []string{"Time"}; !slices.Equal(fromTime, want) {

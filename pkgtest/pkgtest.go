@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"go/types"
 	"maps"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -50,7 +51,10 @@ func Load(t testing.TB, files map[string]string) *packages.Package {
 		Selections:   make(map[*ast.SelectorExpr]*types.Selection),
 		FileVersions: make(map[*ast.File]string),
 	}
-	pkg, err := (&types.Config{Importer: importer.Default()}).Check(name, fset, syntax, info)
+	// Imports go into fset, as they do in packages.Load, so that their
+	// positions are found there too.
+	imp := importer.ForCompiler(fset, runtime.Compiler, nil)
+	pkg, err := (&types.Config{Importer: imp}).Check(name, fset, syntax, info)
 	if err != nil {
 		t.Fatalf("type-check %s: %v\n%s", name, err, listing(names, files))
 	}

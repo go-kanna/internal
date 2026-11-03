@@ -1,6 +1,9 @@
 package enumtype_test
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"slices"
 	"testing"
@@ -77,7 +80,8 @@ type Gen[T any] string
 func TestOf(t *testing.T) {
 	t.Parallel()
 
-	scope := pkgtest.Load(t, map[string]string{"test.go": src}).Types.Scope()
+	pkg := pkgtest.Load(t, map[string]string{"test.go": src})
+	scope := pkg.Types.Scope()
 
 	tests := []struct {
 		name   string
@@ -109,7 +113,7 @@ func TestOf(t *testing.T) {
 				return
 			}
 			var consts []string
-			for _, c := range e.Constants {
+			for _, c := range enumtype.Constants(e.Named, pkg.Fset) {
 				consts = append(consts, c.Name())
 			}
 			if !slices.Equal(consts, tt.consts) {
@@ -119,6 +123,43 @@ func TestOf(t *testing.T) {
 				t.Errorf("Constructor = %q, want %q", got, tt.ctor)
 			}
 		})
+	}
+}
+
+// TestConstants_FileByFile parses the files out of name order, as go/packages,
+// which parses them concurrently, may.
+func TestConstants_FileByFile(t *testing.T) {
+	t.Parallel()
+
+	files := []struct{ name, src string }{
+		{"b.go", "package test\n\nconst (\n\tLevelLow  Level = \"low\"\n\tLevelHigh Level = \"high\"\n)\n"},
+		{"a.go", "package test\n\ntype Level string\n\nconst LevelMid Level = \"mid\"\n"},
+	}
+	fset := token.NewFileSet()
+	syntax := make([]*ast.File, 0, len(files))
+	for _, f := range files {
+		file, err := parser.ParseFile(fset, f.name, f.src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		syntax = append(syntax, file)
+	}
+	pkg, err := (&types.Config{}).Check("test", fset, syntax, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e, ok := enumtype.Of(pkg.Scope().Lookup("Level").Type())
+	if !ok {
+		t.Fatal("Of(Level) reports false")
+	}
+	consts := enumtype.Constants(e.Named, fset)
+	names := make([]string, len(consts))
+	for i, c := range consts {
+		names[i] = c.Name()
+	}
+	if want := []string{"LevelMid", "LevelLow", "LevelHigh"}; !slices.Equal(names, want) {
+		t.Errorf("Constants = %q, want %q", names, want)
 	}
 }
 

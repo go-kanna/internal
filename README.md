@@ -27,6 +27,8 @@ and a minor release may break the one before it.
   what went wrong as diagnostics, and type-checks them again as they are once what a run writes is in place.
 - [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk, and compares what a
   generator generates with golden files.
+- [`qualifier`](./qualifier): tells which package a name in a tag or a directive, such as `model` in
+  `rule=model.CompletedAt`, stands for, by the imports of the file it is written in, as Go does in code.
 - [`scan`](./scan): reads the types a package declares, and the fields of its structs.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
 - [`valuetype`](./valuetype): knows the value types kanna-value generates by their shape, and names their accessor and

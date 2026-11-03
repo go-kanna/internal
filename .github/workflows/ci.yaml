@@ -66,9 +66,22 @@ jobs:
         with:
           path: internal
 
+      # A change here that a generator has to follow comes with a branch of the
+      # same name there; any other generator is tested on its default branch.
+      - name: Choose the generator's branch
+        id: branch
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          REPOSITORY: go-kanna/${{ matrix.repository }}
+        run: |
+          if git ls-remote --exit-code "https://github.com/$REPOSITORY" "refs/heads/$BRANCH" > /dev/null; then
+            echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v7.0.1
         with:
           repository: go-kanna/${{ matrix.repository }}
+          ref: ${{ steps.branch.outputs.ref }}
           path: generator
 
       # The workspace's Go, which an example may ask a newer one of than the

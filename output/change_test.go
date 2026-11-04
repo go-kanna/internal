@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-kanna/internal/deps"
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/output"
 )
@@ -116,6 +117,23 @@ func TestCheck(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Under kanna gen, which runs the generators in the order they need, the fix
+// is to run it again rather than go generate.
+func TestCheck_UnderKanna(t *testing.T) {
+	t.Setenv(deps.PendingEnv, filepath.Join(t.TempDir(), "pending"))
+
+	dir := t.TempDir()
+	put(t, dir, map[string]string{"a_gen.go": generated})
+	ds := output.Check([]output.Change{
+		{Path: filepath.Join(dir, "a_gen.go"), Data: []byte(regenerate)},
+		{Path: filepath.Join(dir, "b_gen.go"), Data: []byte(regenerate)},
+	})
+	want := []string{"out of date; run kanna gen", "not generated yet; run kanna gen"}
+	if got := messages(ds); !slices.Equal(got, want) {
+		t.Errorf("Check() = %q, want %q", got, want)
 	}
 }
 

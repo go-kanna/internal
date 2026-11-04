@@ -236,6 +236,30 @@ func TestExec_Diagnostics(t *testing.T) {
 	}
 }
 
+// Run by kanna gen in the directory of a package, a generator writes its paths
+// from where kanna gen is, so that they lead to the file from there.
+func TestExec_PathsFromKanna(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	dir := filepath.Join(root, "internal", "app")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	d := diag.Errorf(token.Position{Filename: filepath.Join(dir, "p.go"), Line: 3, Column: 1}, "problem")
+	getenv := func(key string) string {
+		if key == deps.DirEnv {
+			return root
+		}
+		return ""
+	}
+
+	got := executeIn(t, command(generates(d)), cli.Env{Dir: dir, Getenv: getenv})
+	if want := filepath.Join("internal", "app", "p.go") + ":3:1: error: problem\n"; got.err != want {
+		t.Errorf("Exec() stderr = %q, want %q", got.err, want)
+	}
+}
+
 func TestExec_ApplyFailure(t *testing.T) {
 	t.Parallel()
 

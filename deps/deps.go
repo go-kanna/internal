@@ -27,6 +27,12 @@ const Protocol = 1
 // there, or reports them.
 const PendingEnv = "KANNA_PENDING"
 
+// DirEnv names the environment variable holding the directory kanna gen runs
+// in. A generator it runs in the directory of a package writes the paths of
+// what it reports relative to that one, as the go command does to where it is
+// run, so that they lead to the file from where the user is.
+const DirEnv = "KANNA_DIR"
+
 // Report is what a run with the same flags would read and write, worked out
 // without generating. The paths of Writes and Inputs are absolute.
 //

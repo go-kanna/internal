@@ -81,6 +81,11 @@ func TestDirective_Parse(t *testing.T) {
 			errs: []string{`p.go:3:1: error: //kanna:share takes <field>, not "Labels=x"`},
 		},
 		{
+			name: "none where one is needed",
+			key:  "fixture", spec: directive.Spec{Words: []string{"skip"}, Needed: true},
+			errs: []string{"p.go:3:1: error: //kanna:fixture needs skip"},
+		},
+		{
 			name: "twice",
 			key:  "map", args: "Name=A Name=B", spec: mapping,
 			want: []directive.Arg{{Name: "Name", Value: "A", HasValue: true}},

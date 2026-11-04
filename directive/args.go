@@ -35,18 +35,25 @@ type Spec struct {
 	// word when AnyWord is set, as key=value when AnyKey is, or as either.
 	Any             string
 	AnyWord, AnyKey bool
+
+	// Needed reports that the directive means nothing without an argument, as
+	// //kanna:fixture means nothing without skip.
+	Needed bool
 }
 
 // Parse splits the arguments of d into what spec takes, in the order they are
 // written, and reports at d each argument spec does not take, takes in the
-// other form, or takes once and finds again. What it reports is left out of
-// what it returns.
+// other form, or takes once and finds again, and none where spec needs one.
+// What it reports is left out of what it returns.
 func (d Directive) Parse(spec Spec) ([]Arg, []diag.Diag) {
 	var (
 		args  []Arg
 		diags []diag.Diag
 		seen  = make(map[string]bool)
 	)
+	if spec.Needed && strings.TrimSpace(d.Args) == "" {
+		return nil, []diag.Diag{diag.Errorf(d.Pos, "%s needs %s", spelled(d.Key, ""), spec.describe())}
+	}
 	for item := range strings.FieldsSeq(d.Args) {
 		name, value, hasValue := strings.Cut(item, "=")
 		a := Arg{Name: name, Value: value, HasValue: hasValue}

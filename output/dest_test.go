@@ -1,6 +1,7 @@
 package output_test
 
 import (
+	"cmp"
 	"maps"
 	"os"
 	"path/filepath"
@@ -17,7 +18,6 @@ func TestPackageName(t *testing.T) {
 		name    string
 		dir     string
 		files   map[string]string // nil leaves the directory missing
-		want    string
 		result  string
 		wantErr bool
 	}{
@@ -28,21 +28,12 @@ func TestPackageName(t *testing.T) {
 			result: "fixture",
 		},
 		{
-			name:   "wanted name agreeing with the declared one",
-			dir:    "fixture",
-			files:  map[string]string{"fixture.go": "package fixture\n"},
-			want:   "fixture",
+			// What a doc.go written by hand declares, for a name of another.
+			name:   "a doc.go declaring the package",
+			dir:    "my-fixture",
+			files:  map[string]string{"doc.go": "// Package fixture holds fixtures.\npackage fixture\n"},
 			result: "fixture",
 		},
-		{
-			// It would be a file that cannot compile next to the one there.
-			name:    "wanted name disagreeing with the declared one",
-			dir:     "fixture",
-			files:   map[string]string{"fixture.go": "package fixture\n"},
-			want:    "fx",
-			wantErr: true,
-		},
-		{name: "wanted name in a missing directory", dir: "fixture", want: "fx", result: "fx"},
 		{name: "missing directory", dir: "fixture", result: "fixture"},
 		{
 			name:   "a previously generated file does not pin the name",
@@ -70,10 +61,8 @@ func TestPackageName(t *testing.T) {
 			wantErr: true,
 		},
 		{name: "directory name that is no identifier", dir: "my-fixture", wantErr: true},
-		{name: "wanted name for such a directory", dir: "my-fixture", want: "fixture", result: "fixture"},
-		{name: "wanted name that is no identifier", dir: "fixture", want: "1fixture", wantErr: true},
 		// An identifier to token.IsIdentifier, but no package can be called so.
-		{name: "wanted name that is the blank identifier", dir: "fixture", want: "_", wantErr: true},
+		{name: "directory name that is the blank identifier", dir: "_", wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -85,7 +74,7 @@ func TestPackageName(t *testing.T) {
 				put(t, dir, tt.files)
 			}
 
-			got, err := output.PackageName(dir, "fixture_gen.go", tt.want)
+			got, err := output.PackageName(dir, "fixture_gen.go")
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("PackageName() = %q, want an error", got)
@@ -106,15 +95,14 @@ func TestPackageName_ErrorsLeaveTheDirectoryOut(t *testing.T) {
 
 	tests := []struct {
 		name  string
+		dir   string
 		files map[string]string
-		want  string // the wanted package name
 		err   string
 	}{
 		{
-			name:  "disagreement",
-			files: map[string]string{"fixture.go": "package fixture\n"},
-			want:  "fx",
-			err:   "the Go files there declare package fixture, not fx",
+			name: "directory name that is no identifier",
+			dir:  "my-fixture",
+			err:  `"my-fixture" is not a valid package name; declare one in a doc.go there`,
 		},
 		{
 			name:  "two packages",
@@ -132,10 +120,12 @@ func TestPackageName_ErrorsLeaveTheDirectoryOut(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			dir := filepath.Join(t.TempDir(), "fixture")
-			put(t, dir, tt.files)
+			dir := filepath.Join(t.TempDir(), cmp.Or(tt.dir, "fixture"))
+			if tt.files != nil {
+				put(t, dir, tt.files)
+			}
 
-			_, err := output.PackageName(dir, "fixture_gen.go", tt.want)
+			_, err := output.PackageName(dir, "fixture_gen.go")
 			if err == nil || err.Error() != tt.err {
 				t.Errorf("PackageName() error = %v, want %q", err, tt.err)
 			}
@@ -159,7 +149,7 @@ func TestPackageName_UnreadableDirectory(t *testing.T) {
 	// Give back what put created the directory with, or it cannot be removed.
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o750) }) //nolint:gosec // see above
 
-	if got, err := output.PackageName(dir, "fixture_gen.go", ""); err == nil {
+	if got, err := output.PackageName(dir, "fixture_gen.go"); err == nil {
 		t.Errorf("PackageName() = %q, want an error", got)
 	}
 }

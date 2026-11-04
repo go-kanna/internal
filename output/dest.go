@@ -14,10 +14,9 @@ import (
 )
 
 // PackageName returns the package of a file named generatedFile, generated into
-// dir. Every Go file in a directory has to agree on its package, so the one the
-// files already there declare wins; failing that, want, when given; failing
-// that, the name of dir. A want that disagrees with what is declared is an
-// error.
+// dir, as Go has it: the one the files already there declare, since every Go
+// file in a directory has to agree on it, or else the name of dir. Another name
+// is declared by hand, in a doc.go there.
 //
 // The files counted are the ones the build would compile. A //go:build ignore
 // helper declaring package main does not count, and neither does
@@ -25,7 +24,7 @@ import (
 // next.
 //
 // An error leaves dir out, for the caller to report it at dir.
-func PackageName(dir, generatedFile, want string) (string, error) {
+func PackageName(dir, generatedFile string) (string, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return "", fmt.Errorf("cannot tell the package: %w", err)
@@ -35,17 +34,12 @@ func PackageName(dir, generatedFile, want string) (string, error) {
 		return "", err
 	}
 
-	name := filepath.Base(abs)
-	switch {
-	case declared != "" && want != "" && want != declared:
-		return "", fmt.Errorf("the Go files there declare package %s, not %s", declared, want)
-	case declared != "":
-		name = declared
-	case want != "":
-		name = want
+	if declared != "" {
+		return declared, nil
 	}
+	name := filepath.Base(abs)
 	if name == "_" || !token.IsIdentifier(name) {
-		return "", fmt.Errorf("%q is not a valid package name", name)
+		return "", fmt.Errorf("%q is not a valid package name; declare one in a doc.go there", name)
 	}
 	return name, nil
 }

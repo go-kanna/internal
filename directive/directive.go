@@ -23,6 +23,9 @@ const namespace = "kanna:"
 type Directive struct {
 	Found bool
 
+	// Key is the key Find looked for.
+	Key string
+
 	// Args is what followed the key on its line, with surrounding space
 	// removed. It is empty for a bare marker.
 	Args string
@@ -77,7 +80,7 @@ func Find(fset *token.FileSet, doc *ast.CommentGroup, key string) (Directive, []
 			ds = append(ds, diag.Errorf(pos, "duplicate %s directive", spelled(key, "")).
 				WithHints(fmt.Sprintf("the first is on line %d", found.Pos.Line)))
 		default:
-			found = Directive{Found: true, Args: args, Pos: pos}
+			found = Directive{Found: true, Key: key, Args: args, Pos: pos}
 		}
 	}
 	return found, ds

@@ -77,6 +77,14 @@ type Command[C any] struct {
 	Deps func(dir string, cfg C, args []string) (deps.Report, error)
 }
 
+// Tags registers -tags in fs, storing into tags, for a command that loads
+// packages: the build tags to load them with, passed to the go command as
+// written, as packages.Config.Tags takes them. Every such command has it, under
+// the one name and spelling.
+func Tags(fs *flag.FlagSet, tags *string) {
+	fs.StringVar(tags, "tags", "", "load the packages with the comma-separated build `tags`, as the go command does")
+}
+
 // Main runs the command on the command line, reporting to stdout and stderr,
 // and returns the code to exit with.
 func (c Command[C]) Main(args []string) int {

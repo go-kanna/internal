@@ -31,7 +31,7 @@ func command(run runFunc) cli.Command[config] {
 		Args:    "[packages]",
 		Help:    "The packages default to the one in the current directory.",
 		Flags: func(fs *flag.FlagSet, cfg *config) {
-			fs.StringVar(&cfg.tags, "tags", "", "comma-separated build tags")
+			cli.Tags(fs, &cfg.tags)
 		},
 		Run: run,
 	}
@@ -372,7 +372,7 @@ func TestExec_UsageAndVersion(t *testing.T) {
 
 	// The flags are listed as the flag package lists them, the command's own
 	// among them.
-	if got := execute(t, command(generates()), t.TempDir(), "-h"); !strings.Contains(got.stdout, "  -tags string\n") ||
+	if got := execute(t, command(generates()), t.TempDir(), "-h"); !strings.Contains(got.stdout, "  -tags tags\n") ||
 		!strings.Contains(got.stdout, "  -check\n") || !strings.Contains(got.stdout, "KANNA_CHECK=1") {
 		t.Errorf("usage lists no -tags, or no -check with KANNA_CHECK:\n%s", got.stdout)
 	}

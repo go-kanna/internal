@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/go-kanna/internal/deps"
 	"github.com/go-kanna/internal/diag"
 )
 
@@ -61,9 +62,10 @@ type Applied struct {
 const handWritten = "has no generated-code header, so it looks hand-written; go generate leaves it alone"
 
 // Check reports every file that changes would alter, instead of altering it:
-// a CI failure should name everything one go generate fixes. The ways a file
-// can fail are kept apart, because go generate fixes only some of them.
+// a CI failure should name everything one regeneration fixes. The ways a file
+// can fail are kept apart, because regenerating fixes only some of them.
 func Check(changes []Change) []diag.Diag {
+	run := regeneration()
 	var ds []diag.Diag
 	for _, c := range changes {
 		at := token.Position{Filename: c.Path}
@@ -72,7 +74,7 @@ func Check(changes []Change) []diag.Diag {
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
 			if !c.Remove {
-				ds = append(ds, diag.Errorf(at, "not generated yet; run go generate"))
+				ds = append(ds, diag.Errorf(at, "not generated yet; run %s", run))
 			}
 		case err != nil:
 			ds = append(ds, diag.Errorf(at, "%v", pathless(err)))
@@ -81,12 +83,22 @@ func Check(changes []Change) []diag.Diag {
 				ds = append(ds, diag.Errorf(at, "%s", handWritten))
 			}
 		case c.Remove:
-			ds = append(ds, diag.Errorf(at, "left over from an earlier run; run go generate"))
+			ds = append(ds, diag.Errorf(at, "left over from an earlier run; run %s", run))
 		case !bytes.Equal(existing, c.Data):
-			ds = append(ds, diag.Errorf(at, "out of date; run go generate"))
+			ds = append(ds, diag.Errorf(at, "out of date; run %s", run))
 		}
 	}
 	return ds
+}
+
+// regeneration names what regenerates the files a check finds out of date:
+// kanna gen when the generator runs under it, which sets deps.PendingEnv for
+// it, and go generate otherwise.
+func regeneration() string {
+	if _, ok := os.LookupEnv(deps.PendingEnv); ok {
+		return "kanna gen"
+	}
+	return "go generate"
 }
 
 // Apply makes changes, stopping at the first that fails. Every change is

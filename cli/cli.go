@@ -152,25 +152,37 @@ func (c Command[C]) Exec(env Env, args []string) int {
 	}
 
 	changes, ds := c.Run(dir, cfg, fs.Args())
-	diag.Write(env.Err, dir, ds)
+	shown := shownFrom(env, dir)
+	diag.Write(env.Err, shown, ds)
 	if diag.HasErrors(ds) {
 		return ExitFailure
 	}
 
 	if check {
 		ds := output.Check(changes)
-		diag.Write(env.Err, dir, ds)
+		diag.Write(env.Err, shown, ds)
 		return exitCode(ds)
 	}
 
 	applied, ds := output.Apply(changes)
 	if verbose {
 		for _, a := range applied {
-			fmt.Fprintln(env.Out, a.Action, diag.ShortPath(dir, a.Path))
+			fmt.Fprintln(env.Out, a.Action, diag.ShortPath(shown, a.Path))
 		}
 	}
-	diag.Write(env.Err, dir, ds)
+	diag.Write(env.Err, shown, ds)
 	return exitCode(ds)
+}
+
+// shownFrom returns the directory the paths a run reports are written relative
+// to: the one kanna gen runs in, when it runs the generator, and dir otherwise.
+func shownFrom(env Env, dir string) string {
+	if env.Getenv != nil {
+		if d := env.Getenv(deps.DirEnv); filepath.IsAbs(d) {
+			return d
+		}
+	}
+	return dir
 }
 
 // answerDeps prints the report of a run in dir, for -deps.

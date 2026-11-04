@@ -143,6 +143,8 @@ func TestFind(t *testing.T) {
 			},
 		},
 		{name: "two typos away", lines: []string{"//kanna:vlidte"}, key: "validate"},
+		// A key another generator has is no typo of this one.
+		{name: "a key of the family a letter away", lines: []string{"//kanna:scope"}, key: "scopes"},
 	}
 
 	for _, tt := range tests {

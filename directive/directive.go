@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -44,7 +45,8 @@ type Directive struct {
 //     unspaced form as a directive, so a spaced line stays in the doc comment
 //     and shows in go doc and on pkg.go.dev, and keeping the namespace out of
 //     documentation is the point of the unspaced form;
-//   - one whose key is a single typo away from key.
+//   - one whose key is a single typo away from key, and no key of another
+//     generator of the family.
 func Find(fset *token.FileSet, doc *ast.CommentGroup, key string) (Directive, []diag.Diag) {
 	if doc == nil {
 		return Directive{}, nil
@@ -69,7 +71,9 @@ func Find(fset *token.FileSet, doc *ast.CommentGroup, key string) (Directive, []
 
 		switch {
 		case k != key:
-			if suggest.Distance(k, key) == 1 {
+			// Another generator's key, such as scope beside scopes, is no
+			// typo of this one.
+			if suggest.Distance(k, key) == 1 && !slices.Contains(Keys, k) {
 				ds = append(ds, diag.Warningf(pos, "%q is not recognized as a directive", written).
 					WithHints(fmt.Sprintf("did you mean %q?", spelled(key, args))))
 			}

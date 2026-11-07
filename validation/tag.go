@@ -163,3 +163,10 @@ func add(levels []level, item string) ([]level, error) {
 	}
 	return levels, nil
 }
+
+// HasTag reports whether tag holds a validate tag, even one that is not a valid
+// quoted string, which Planner.Struct reports.
+func HasTag(tag reflect.StructTag) bool {
+	_, ok, _ := lookup(tag)
+	return ok
+}

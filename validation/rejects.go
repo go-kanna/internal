@@ -26,9 +26,13 @@ var (
 // the value to tell: required, a length, a comparison, oneof, or a pattern. It
 // returns what the rule reports, as go-kanna/validate spells it, such as
 // "greater_than_or_equal_to (count=1)". A rule that runs code of its own, or
-// looks at another field, is left to the run.
+// looks at another field, is left to the run, and so are all the rules of a
+// value whose required or omitempty asks the IsZero method of its type.
 func Rejects(v *Value, value constant.Value) (string, bool) {
 	if v == nil || v.pointee != nil {
+		return "", false
+	}
+	if v.zero == zeroMethod && (v.required || v.omitEmpty) {
 		return "", false
 	}
 	if zero := isZero(value); v.required && zero {

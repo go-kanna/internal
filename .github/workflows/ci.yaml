@@ -59,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        repository: [di, fixture, i18n, mapper, orm, validate, value]
+        repository: [config, di, fixture, i18n, mapper, orm, validate, value]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1

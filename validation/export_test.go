@@ -221,3 +221,7 @@ func ParseTag(tag reflect.StructTag) ([]string, error) {
 	}
 	return spelled, nil
 }
+
+// WrittenBy is writtenBy, which reports whether tool wrote the file at path,
+// which it names name.
+var WrittenBy = writtenBy

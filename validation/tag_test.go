@@ -115,3 +115,29 @@ func TestParseTag_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestHasTag(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tag  reflect.StructTag
+		want bool
+	}{
+		{name: "absent", tag: `json:"name"`, want: false},
+		{name: "present", tag: validateTag("required"), want: true},
+		{name: "empty", tag: validateTag(""), want: true},
+		{name: "not a valid quoted string", tag: `json:"zip" validate:"pattern=^\d+$"`, want: true},
+		{name: "a key ending in validate", tag: `xvalidate:"required"`, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := validation.HasTag(tt.tag); got != tt.want {
+				t.Errorf("HasTag(%s) = %v, want %v", tt.tag, got, tt.want)
+			}
+		})
+	}
+}

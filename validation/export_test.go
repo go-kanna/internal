@@ -10,10 +10,74 @@ import (
 	"strings"
 
 	"github.com/go-kanna/internal/directive"
+	"github.com/go-kanna/internal/gofile"
 	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/qualifier"
 	"github.com/go-kanna/internal/scan"
 )
+
+// marked returns the structs in pkgs marked //kanna:validate, and a Planner as
+// kanna-validate makes for a run that writes Validate for each of them and
+// rewrites the output of every package.
+func marked(fset *token.FileSet, pkgs []*packages.Package) ([]scan.Struct, Planner) {
+	var (
+		found  []scan.Struct
+		writes []*types.TypeName
+	)
+	for _, s := range scan.Structs(pkgs) {
+		if d, _ := directive.Find(fset, s.Doc, DirectiveKey); d.Found {
+			found = append(found, s)
+			writes = append(writes, s.Named.Obj())
+		}
+	}
+	rewrites := make(map[string]bool, len(pkgs))
+	for _, pkg := range pkgs {
+		rewrites[pkg.PkgPath] = true
+	}
+	return found, NewPlanner(fset, writes, rewrites)
+}
+
+// Emit renders the file the structs in pkgs marked //kanna:validate, which make
+// one package, are generated into, as kanna-validate writes it: the checks of
+// each in a Validate method. declared are the top-level names the package
+// declares besides.
+func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]byte, error) {
+	structs, p := marked(fset, pkgs)
+	var planned []Planned
+	for _, s := range structs {
+		fields, diags := p.Struct(s)
+		if len(diags) > 0 {
+			return nil, fmt.Errorf("%v", diags)
+		}
+		planned = append(planned, Planned{Name: s.Name, Fields: fields})
+	}
+
+	f := gofile.New(Generator, pkgs[0].PkgPath, pkgs[0].Name)
+	f.Reserve(declared...)
+	w := NewWriter(f, planned, declared)
+	for _, s := range planned {
+		scope := f.Scope()
+		x, errs := scope.Name("x"), scope.Name("errs")
+		fmt.Fprintf(f, "// Validate checks %s against the validate tags of %s. It returns the\n", x, s.Name)
+		fmt.Fprintf(f, "// %s.Errors of every rule %s breaks, or nil.\n", w.Runtime(), x)
+		fmt.Fprintf(f, "func (%s %s) Validate() error {\n", x, s.Name)
+		fmt.Fprintf(f, "var %s %s.Errors\n", errs, w.Runtime())
+
+		body := w.Body(scope, x, errs)
+		for _, field := range s.Fields {
+			// encoding/json flattens an embedded struct without a JSON name.
+			path, named := JSONName(field.Field)
+			nestPath := strconv.Quote(path)
+			if field.Embedded && !named && field.Tag.Get("json") != "-" {
+				nestPath = `""`
+			}
+			fmt.Fprint(f, "\n")
+			body.Value(field.Value, x+"."+field.Name, strconv.Quote(path), nestPath)
+		}
+		fmt.Fprintf(f, "\nreturn %s.Err()\n}\n\n", errs)
+	}
+	return f.Bytes() //nolint:wrapcheck // the test shows it as it is
+}
 
 // Plans plans the structs in pkgs marked //kanna:validate, as kanna-validate
 // does in a run that writes Validate for each of them and rewrites the output
@@ -22,25 +86,10 @@ import (
 // parentheses, and each diagnostic as diag.Diag.String does. A struct with a
 // diagnostic has no plan, as kanna-validate writes nothing for it.
 func Plans(fset *token.FileSet, pkgs []*packages.Package) (map[string][]string, []string) {
-	var (
-		marked []scan.Struct
-		writes []*types.TypeName
-	)
-	for _, s := range scan.Structs(pkgs) {
-		if d, _ := directive.Find(fset, s.Doc, DirectiveKey); d.Found {
-			marked = append(marked, s)
-			writes = append(writes, s.Named.Obj())
-		}
-	}
-	rewrites := make(map[string]bool, len(pkgs))
-	for _, pkg := range pkgs {
-		rewrites[pkg.PkgPath] = true
-	}
-	p := NewPlanner(fset, writes, rewrites)
-
-	spelled := make(map[string][]string, len(marked))
+	structs, p := marked(fset, pkgs)
+	spelled := make(map[string][]string, len(structs))
 	var msgs []string
-	for _, s := range marked {
+	for _, s := range structs {
 		fields, diags := p.Struct(s)
 		for _, d := range diags {
 			msgs = append(msgs, d.String())
@@ -172,3 +221,7 @@ func ParseTag(tag reflect.StructTag) ([]string, error) {
 	}
 	return spelled, nil
 }
+
+// WrittenBy is writtenBy, which reports whether tool wrote the file at path,
+// which it names name.
+var WrittenBy = writtenBy

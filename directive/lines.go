@@ -15,7 +15,7 @@ import (
 // a line under none of them is told apart from one another generator reads.
 // pluck is gone, but kanna-orm still reads it to say so.
 var Keys = []string{
-	"allow", "container", "converter", "enum", "fixture", "map", "mapper", "share", "validate", "value",
+	"allow", "config", "container", "converter", "enum", "fixture", "map", "mapper", "share", "validate", "value",
 	"conflict", "lock", "pluck", "repository", "scope", "scopes",
 }
 

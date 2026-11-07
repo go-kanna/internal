@@ -26,7 +26,19 @@ type Settings struct {
 	Debug   bool   ` + "`validate:\"required\"`" + `
 	Other   string
 	Confirm string ` + "`validate:\"eqfield=Other\"`" + `
+	Level   Level  ` + "`validate:\"required\"`" + `
+	Host    Host   ` + "`validate:\"omitempty,min=5\"`" + `
 }
+
+// Level counts from 0, which its IsZero does not take for unset.
+type Level int
+
+func (Level) IsZero() bool { return false }
+
+// Host is unset as "none" too.
+type Host string
+
+func (h Host) IsZero() bool { return h == "" || h == "none" }
 `})
 	structs := scan.Structs([]*packages.Package{pkg})
 	fields, diags := validation.NewPlanner(pkg.Fset, nil, nil).Struct(structs[0])
@@ -62,6 +74,8 @@ type Settings struct {
 		{field: "Debug", value: constant.MakeBool(false), want: "blank"},
 		{field: "Debug", value: constant.MakeBool(true), want: ""},
 		{field: "Confirm", value: constant.MakeString("x"), want: ""},
+		{field: "Level", value: constant.MakeInt64(0), want: ""},
+		{field: "Host", value: constant.MakeString("none"), want: ""},
 	}
 	for _, tt := range tests {
 		got, ok := validation.Rejects(values[tt.field], tt.value)

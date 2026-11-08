@@ -173,7 +173,7 @@ func TestResolveRule(t *testing.T) {
 }
 
 // ownRule is the hint of a rule= naming a type that is no rule.
-const ownRule = "for a rule of your own, check the value in the struct's validate(errs *validate.Errors)"
+const ownRule = "for a rule of your own, check the value in the struct's validate(errs *validator.Errors)"
 
 func TestResolveRule_Errors(t *testing.T) {
 	t.Parallel()

@@ -18,19 +18,19 @@ import (
 	"github.com/go-kanna/internal/scan"
 )
 
-// What kanna-validate writes, and what tells a Validate of its writing, which
+// What kanna-validator writes, and what tells a Validate of its writing, which
 // the next run of it may take away.
 const (
-	// DirectiveKey marks a struct kanna-validate writes Validate for.
+	// DirectiveKey marks a struct kanna-validator writes Validate for.
 	DirectiveKey = "validate"
 
-	// OutputFile is the file kanna-validate writes the methods of a package
+	// OutputFile is the file kanna-validator writes the methods of a package
 	// into.
-	OutputFile = "validate_gen.go"
+	OutputFile = "validator_gen.go"
 
-	// Generator is the name kanna-validate goes by in the header of what it
+	// Generator is the name kanna-validator goes by in the header of what it
 	// writes.
-	Generator = "kanna-validate"
+	Generator = "kanna-validator"
 )
 
 // What kanna-value writes, which gives an enum Validate.
@@ -126,7 +126,7 @@ type mark struct {
 
 // NewPlanner returns a Planner for one run of a generator. writes are the types
 // the run generates Validate for, which have it even before it is written, and
-// rewrites the import paths of the packages whose output of kanna-validate the
+// rewrites the import paths of the packages whose output of kanna-validator the
 // run rewrites, where a Validate an earlier run generated may be about to go. A
 // generator that writes no Validate passes neither: a type then has Validate as
 // what is written and the marks on the declarations say.

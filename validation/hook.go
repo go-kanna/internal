@@ -18,10 +18,10 @@ import (
 	"github.com/go-kanna/internal/suggest"
 )
 
-// base spells validate.Base, the path of an error on a value as a whole.
+// base spells validator.Base, the path of an error on a value as a whole.
 const base = "base"
 
-// index matches the index of an element, as validate.Index spells it.
+// index matches the index of an element, as validator.Index spells it.
 var index = regexp.MustCompile(`^\[[0-9]+\]`)
 
 // Hook returns the validate method s declares for its generated checks to call
@@ -40,13 +40,13 @@ func Hook(fset *token.FileSet, s scan.Struct) (*types.Func, []diag.Diag) {
 			return m, nil
 		}
 		return nil, []diag.Diag{diag.Errorf(fset.Position(m.Pos()),
-			"%s.validate must be func(*validate.Errors) for the generated Validate to call it", s.Name).
+			"%s.validate must be func(*validator.Errors) for the generated Validate to call it", s.Name).
 			WithHints("rename it if it is not meant to be called from Validate")}
 	}
 	return nil, nil
 }
 
-// isErrorsPointer reports whether t is *validate.Errors of the runtime.
+// isErrorsPointer reports whether t is *validator.Errors of the runtime.
 func isErrorsPointer(t types.Type) bool {
 	ptr, ok := t.(*types.Pointer)
 	if !ok {
@@ -62,11 +62,11 @@ func isErrorsPointer(t types.Type) bool {
 // with what Config.TypesInfo records, among them that of s.
 //
 // It looks at the calls of Add and Nest on the Errors the hook is given, whose
-// path is a constant, or validate.Index or validate.Key of one. A path is
+// path is a constant, or validator.Index or validator.Key of one. A path is
 // reported only when no way of reading it names something: a map key, which
-// validate.Key writes as it is, may hold a dot, and so may a JSON name. Below a
-// value whose Validate kanna-validate does not write, nothing is checked, as
-// what it reports is up to that Validate.
+// validator.Key writes as it is, may hold a dot, and so may a JSON name.
+// Below a value whose Validate kanna-validator does not write, nothing is
+// checked, as what it reports is up to that Validate.
 func HookPaths(fset *token.FileSet, pkgs []*packages.Package, s scan.Struct, hook *types.Func) []diag.Diag {
 	i := slices.IndexFunc(pkgs, func(p *packages.Package) bool { return p.PkgPath == s.PkgPath })
 	if i < 0 || pkgs[i].TypesInfo == nil {
@@ -168,7 +168,7 @@ func (c hookChecker) errsMethod(call *ast.CallExpr) string {
 	return ""
 }
 
-// step is what validate.Index or validate.Key adds to a path.
+// step is what validator.Index or validator.Key adds to a path.
 type step string
 
 const (
@@ -176,8 +176,8 @@ const (
 	keyStep   step = "Key"
 )
 
-// pathOf returns the constant path e starts with, and the steps validate.Index
-// and validate.Key add to it, innermost first. It reports false for a path
+// pathOf returns the constant path e starts with, and the steps validator.Index
+// and validator.Key add to it, innermost first. It reports false for a path
 // that is not so made.
 func (c hookChecker) pathOf(e ast.Expr) (string, []step, bool) {
 	if tv, ok := c.info.Types[e]; ok && tv.Value != nil && tv.Value.Kind() == constant.String {
@@ -230,7 +230,7 @@ func (c hookChecker) spell(e ast.Expr, path string) string {
 }
 
 func (c hookChecker) wholeHint() string {
-	return "an error on " + c.target.Name + " as a whole goes under validate.Base"
+	return "an error on " + c.target.Name + " as a whole goes under validator.Base"
 }
 
 // kind is what a path can go on with below a value.
@@ -270,7 +270,7 @@ func (c hookChecker) kindOf(t types.Type) (kind, types.Type) {
 	return leaf, nil
 }
 
-// validatesItself reports whether t has a Validate that kanna-validate does
+// validatesItself reports whether t has a Validate that kanna-validator does
 // not write, which reports its errors under paths of its own.
 func (c hookChecker) validatesItself(t types.Type) bool {
 	obj, _, _ := types.LookupFieldOrMethod(t, true, nil, "Validate")
@@ -445,9 +445,9 @@ func (w *walk) end(t types.Type) bool {
 		}
 		at := len(w.path) + 1 + i // past where any reading of the constant fails
 		if s == indexStep {
-			return w.fail(at, "", "validate.Index needs a slice or an array, not %s", types.TypeString(t, w.c.qualify))
+			return w.fail(at, "", "validator.Index needs a slice or an array, not %s", types.TypeString(t, w.c.qualify))
 		}
-		return w.fail(at, "", "validate.Key needs a map, not %s", types.TypeString(t, w.c.qualify))
+		return w.fail(at, "", "validator.Key needs a map, not %s", types.TypeString(t, w.c.qualify))
 	}
 	return true
 }

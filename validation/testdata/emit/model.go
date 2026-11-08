@@ -1,7 +1,7 @@
-// Package emit holds one of every construct kanna-validate generates but the
-// hook. Its validate_gen.go.golden is the golden file of the emit test. It does
-// not import go-kanna/validate, which this module does not require, so the
-// methods it declares by hand return errors of their own.
+// Package emit holds one of every construct kanna-validator generates but the
+// hook. Its validator_gen.go.golden is the golden file of the emit test. It
+// does not import go-kanna/validator, which this module does not require, so
+// the methods it declares by hand return errors of their own.
 package emit
 
 import (

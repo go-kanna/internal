@@ -50,7 +50,7 @@ type Config struct {
 	Deps bool
 
 	// Regenerated names the files the caller is about to write again in the
-	// packages it loads, such as "validate_gen.go". What they hold is about to
+	// packages it loads, such as "validator_gen.go". What they hold is about to
 	// be replaced, so one that no longer type-checks is set aside for the load;
 	// see Load. Of the files not named here, only a generated one that still
 	// declares a package since renamed is ever set aside, as it cannot compile

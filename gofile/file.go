@@ -51,7 +51,7 @@ type importSpec struct {
 	local string // the name the file refers to it by
 }
 
-// New starts a file that generator, such as "kanna-validate", writes into the
+// New starts a file that generator, such as "kanna-validator", writes into the
 // package pkgName at pkgPath.
 func New(generator, pkgPath, pkgName string) *File {
 	return &File{

@@ -23,7 +23,7 @@ Go の internal ルールはインポートパスで適用されるので、こ�
 - [`qualifier`](./qualifier): タグやディレクティブの中の名前（`rule=model.CompletedAt` の `model`）がどのパッケージを指すかを、Go がコードでするのと同じく、書かれたファイルの import で決めます。
 - [`scan`](./scan): パッケージが宣言する型と、構造体のフィールドを読み取ります。
 - [`suggest`](./suggest): 打ち間違えた名前から、意図されたと思われる名前を見つけます。
-- [`validation`](./validation): validate タグの意味（kanna-validate がどう読み、生成するコードが値をどう確かめるか）を持ちます。kanna-validate 自身と、タグで構造体を確かめるほかのジェネレータの両方が使います。
+- [`validation`](./validation): validate タグの意味（kanna-validator がどう読み、生成するコードが値をどう確かめるか）を持ちます。kanna-validator 自身と、タグで構造体を確かめるほかのジェネレータの両方が使います。
 - [`valuetype`](./valuetype): kanna-value が生成する値オブジェクトを形で見分け、アクセサとコンストラクタの名前を決めます。kanna-value 自身と、その型を読み取るジェネレータの両方が使います。
 
 ## 開発

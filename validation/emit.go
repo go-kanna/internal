@@ -12,7 +12,7 @@ import (
 )
 
 // runtimePath is the package generated checks record what breaks with.
-const runtimePath = "github.com/go-kanna/validate"
+const runtimePath = "github.com/go-kanna/validator"
 
 // formatRulesPath is the package holding the rules email, url, and uuid run.
 const formatRulesPath = "github.com/go-kanna/value/rule"
@@ -61,7 +61,7 @@ func NewWriter(f *gofile.File, structs []Planned, taken []string) *Writer {
 		f.Reserve(patterns[expr])
 	}
 
-	w := &Writer{f: f, rt: f.Import(runtimePath, "validate"), patterns: patterns}
+	w := &Writer{f: f, rt: f.Import(runtimePath, "validator"), patterns: patterns}
 	if len(order) > 0 {
 		re := f.Import("regexp", "regexp")
 		fmt.Fprint(f, "var (\n")
@@ -73,14 +73,14 @@ func NewWriter(f *gofile.File, structs []Planned, taken []string) *Writer {
 	return w
 }
 
-// Runtime returns the name the file imports go-kanna/validate under.
+// Runtime returns the name the file imports go-kanna/validator under.
 func (w *Writer) Runtime() string {
 	return w.rt
 }
 
 // Body starts the checks of one function or method, whose local variables s
 // hands out: x holds the struct the fields are of, and errs is the
-// validate.Errors what they break goes into.
+// validator.Errors what they break goes into.
 func (w *Writer) Body(s gofile.Scope, x, errs string) Body {
 	return Body{m: &method{Writer: w, scope: s, x: x, errs: errs, loopVars: make(map[string][]string)}}
 }

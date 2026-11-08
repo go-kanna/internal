@@ -47,7 +47,7 @@ type Env struct {
 // Command is a generator run from the command line. C holds what its own flags
 // set; every run starts from a zero C.
 type Command[C any] struct {
-	// Name is the command's name, such as "kanna-validate".
+	// Name is the command's name, such as "kanna-validator".
 	Name string
 
 	// Summary says in one line what the command does.

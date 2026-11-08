@@ -17,7 +17,7 @@ import (
 )
 
 // marked returns the structs in pkgs marked //kanna:validate, and a Planner as
-// kanna-validate makes for a run that writes Validate for each of them and
+// kanna-validator makes for a run that writes Validate for each of them and
 // rewrites the output of every package.
 func marked(fset *token.FileSet, pkgs []*packages.Package) ([]scan.Struct, Planner) {
 	var (
@@ -38,7 +38,7 @@ func marked(fset *token.FileSet, pkgs []*packages.Package) ([]scan.Struct, Plann
 }
 
 // Emit renders the file the structs in pkgs marked //kanna:validate, which make
-// one package, are generated into, as kanna-validate writes it: the checks of
+// one package, are generated into, as kanna-validator writes it: the checks of
 // each in a Validate method. declared are the top-level names the package
 // declares besides.
 func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]byte, error) {
@@ -79,12 +79,12 @@ func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]b
 	return f.Bytes() //nolint:wrapcheck // the test shows it as it is
 }
 
-// Plans plans the structs in pkgs marked //kanna:validate, as kanna-validate
+// Plans plans the structs in pkgs marked //kanna:validate, as kanna-validator
 // does in a run that writes Validate for each of them and rewrites the output
 // of every package. It spells the plan of each struct, by name, as a line per
 // field, such as `Name(name): required=="" runes<=50` with the JSON name in
 // parentheses, and each diagnostic as diag.Diag.String does. A struct with a
-// diagnostic has no plan, as kanna-validate writes nothing for it.
+// diagnostic has no plan, as kanna-validator writes nothing for it.
 func Plans(fset *token.FileSet, pkgs []*packages.Package) (map[string][]string, []string) {
 	structs, p := marked(fset, pkgs)
 	spelled := make(map[string][]string, len(structs))

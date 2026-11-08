@@ -386,7 +386,7 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 	newFunc, _ := valuetype.Constructors(obj.Name())
 	e := ruleErrorf("rule=%s has no constructor %s(%s) (%s, error), as kanna-value generates for a value type or an enum",
 		r.param, newFunc, at.typeString(t), obj.Name())
-	e.hint = "for a rule of your own, check the value in the struct's validate(errs *validate.Errors)"
+	e.hint = "for a rule of your own, check the value in the struct's validate(errs *validator.Errors)"
 	return nil, e
 }
 

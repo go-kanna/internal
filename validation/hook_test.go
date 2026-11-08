@@ -13,10 +13,10 @@ import (
 	"github.com/go-kanna/internal/validation"
 )
 
-// fakeRuntime stands in for the runtime of go-kanna/validate, which this module
-// does not require: a hook takes its *validate.Errors, and a path names its
-// Index and Key.
-const fakeRuntime = `package validate
+// fakeRuntime stands in for the runtime of go-kanna/validator, which this
+// module does not require: a hook takes its *validator.Errors, and a path names
+// its Index and Key.
+const fakeRuntime = `package validator
 
 const Base = "base"
 
@@ -40,16 +40,16 @@ func Fail(code string) error  { return nil }
 `
 
 // writeModule writes files into a fresh module, which resolves
-// github.com/go-kanna/validate to fakeRuntime, and returns its directory.
+// github.com/go-kanna/validator to fakeRuntime, and returns its directory.
 func writeModule(t *testing.T, files map[string]string) string {
 	t.Helper()
 
 	dir := t.TempDir()
 	files["go.mod"] = "module example.com/app\n\ngo 1.26.0\n\n" +
-		"require github.com/go-kanna/validate v0.0.0\n\n" +
-		"replace github.com/go-kanna/validate => ./validate\n"
-	files["validate/go.mod"] = "module github.com/go-kanna/validate\n\ngo 1.26.0\n"
-	files["validate/validate.go"] = fakeRuntime
+		"require github.com/go-kanna/validator v0.0.0\n\n" +
+		"replace github.com/go-kanna/validator => ./validator\n"
+	files["validator/go.mod"] = "module github.com/go-kanna/validator\n\ngo 1.26.0\n"
+	files["validator/validator.go"] = fakeRuntime
 	for name, content := range files {
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -63,8 +63,8 @@ func writeModule(t *testing.T, files map[string]string) string {
 }
 
 // hooks loads the module in dir and finds the hook of each struct marked
-// //kanna:validate, as kanna-validate does, and checks its paths. It returns the
-// structs by name, with " (hook)" after one that has a hook, and each
+// //kanna:validate, as kanna-validator does, and checks its paths. It returns
+// the structs by name, with " (hook)" after one that has a hook, and each
 // diagnostic as diag.Diag.String spells it, with the files named from dir.
 func hooks(t *testing.T, dir string) ([]string, string) {
 	t.Helper()
@@ -101,16 +101,16 @@ func TestHook(t *testing.T) {
 
 	dir := writeModule(t, map[string]string{"hook.go": `package app
 
-import "github.com/go-kanna/validate"
+import "github.com/go-kanna/validator"
 
 //kanna:validate
 type Signup struct {
 	Email string ` + "`" + `json:"email" validate:"required"` + "`" + `
 }
 
-func (s Signup) validate(errs *validate.Errors) {
+func (s Signup) validate(errs *validator.Errors) {
 	if s.Email == "admin@example.com" {
-		errs.Add("email", validate.Fail("reserved"))
+		errs.Add("email", validator.Fail("reserved"))
 	}
 }
 
@@ -122,9 +122,9 @@ type Audit struct {
 	By string ` + "`" + `json:"by" validate:"required"` + "`" + `
 }
 
-func (a *Audit) validate(errs *validate.Errors) {
+func (a *Audit) validate(errs *validator.Errors) {
 	if a.By == "root" {
-		errs.Add("by", validate.Fail("reserved"))
+		errs.Add("by", validator.Fail("reserved"))
 	}
 }
 
@@ -164,7 +164,7 @@ func (s Signup) validate() error { return nil }
 		t.Errorf("structs = %q, want %q", names, want)
 	}
 	want := "./hook.go:8:17: error: " +
-		"Signup.validate must be func(*validate.Errors) for the generated Validate to call it\n" +
+		"Signup.validate must be func(*validator.Errors) for the generated Validate to call it\n" +
 		"  rename it if it is not meant to be called from Validate\n"
 	if diags != want {
 		t.Errorf("diagnostics:\n%s\nwant:\n%s", diags, want)
@@ -173,7 +173,7 @@ func (s Signup) validate() error { return nil }
 
 const hookTypes = `package app
 
-import "github.com/go-kanna/validate"
+import "github.com/go-kanna/validator"
 
 type Address struct {
 	Zip string ` + "`json:\"zip\"`" + `
@@ -187,8 +187,8 @@ type Item struct {
 type Manual struct{}
 
 func (Manual) Validate() error {
-	var errs validate.Errors
-	errs.Add("virtual", validate.Blank())
+	var errs validator.Errors
+	errs.Add("virtual", validator.Blank())
 	return errs.Err()
 }
 
@@ -205,7 +205,7 @@ func TestHookPaths_ThatCanBe(t *testing.T) {
 		"types.go": hookTypes,
 		"order.go": `package app
 
-import "github.com/go-kanna/validate"
+import "github.com/go-kanna/validator"
 
 //kanna:validate
 type Order struct {
@@ -224,9 +224,9 @@ type Order struct {
 
 const named = "name"
 
-func (o Order) validate(errs *validate.Errors) {
+func (o Order) validate(errs *validator.Errors) {
 	errs.Add(named, nil)
-	errs.Add(validate.Base, nil)
+	errs.Add(validator.Base, nil)
 	errs.Add("address.zip", nil)
 	errs.Add("address.base", nil)
 	errs.Add("items[0].sku", nil)
@@ -238,19 +238,19 @@ func (o Order) validate(errs *validate.Errors) {
 	errs.Add("payload.anything", nil)
 	errs.Add("checked.anything", nil)
 	errs.Add("wrapped.virtual", nil)
-	errs.Add(validate.Index("items", 1), nil)
-	errs.Add(validate.Index(validate.Index("grid", 0), 1), nil)
-	errs.Add(validate.Key("labels", "x"), nil)
+	errs.Add(validator.Index("items", 1), nil)
+	errs.Add(validator.Index(validator.Index("grid", 0), 1), nil)
+	errs.Add(validator.Key("labels", "x"), nil)
 	errs.Nest("", nil)
 	errs.Nest("address", nil)
 	func() {
 		errs.Add("address.zip", nil)
-		errs := &validate.Errors{}
+		errs := &validator.Errors{}
 		errs.Add("nothing", nil)
 	}()
-	var other validate.Errors
+	var other validator.Errors
 	other.Add("nothing", nil)
-	other.Add(validate.Index("nothing", 0), nil)
+	other.Add(validator.Index("nothing", 0), nil)
 	_ = o.note
 }
 
@@ -261,7 +261,7 @@ type Flat struct {
 	Manual
 }
 
-func (f Flat) validate(errs *validate.Errors) {
+func (f Flat) validate(errs *validator.Errors) {
 	errs.Add("virtual", nil)
 }
 `,
@@ -279,7 +279,7 @@ func TestHookPaths_ThatCannotBe(t *testing.T) {
 		"types.go": hookTypes,
 		"order.go": `package app
 
-import "github.com/go-kanna/validate"
+import "github.com/go-kanna/validator"
 
 //kanna:validate
 type Order struct {
@@ -294,7 +294,7 @@ type Order struct {
 
 const typo = "nme"
 
-func (o Order) validate(errs *validate.Errors) {
+func (o Order) validate(errs *validator.Errors) {
 	errs.Add("aeg", nil)
 	errs.Add(typo, nil)
 	errs.Add("zzzzzz", nil)
@@ -307,9 +307,9 @@ func (o Order) validate(errs *validate.Errors) {
 	errs.Add("address[0]", nil)
 	errs.Add("base.zip", nil)
 	errs.Add("", nil)
-	errs.Add(validate.Index("name", 0), nil)
-	errs.Add(validate.Key("items", "x"), nil)
-	errs.Nest(validate.Index("", 0), nil)
+	errs.Add(validator.Index("name", 0), nil)
+	errs.Add(validator.Key("items", "x"), nil)
+	errs.Nest(validator.Index("", 0), nil)
 	errs.Add("virtual", nil)
 }
 `,
@@ -321,7 +321,7 @@ func (o Order) validate(errs *validate.Errors) {
 ./order.go:20:11: error: "nme" is not a path of Order: Order has no field "nme"
   did you mean "name"?
 ./order.go:21:11: error: "zzzzzz" is not a path of Order: Order has no field "zzzzzz"
-  an error on Order as a whole goes under validate.Base
+  an error on Order as a whole goes under validator.Base
 ./order.go:22:11: error: "address.zpi" is not a path of Order: address has no field "zpi"
   did you mean "address.zip"?
 ./order.go:23:11: error: "age.years" is not a path of Order: age is int, with nothing under it
@@ -333,14 +333,14 @@ func (o Order) validate(errs *validate.Errors) {
 ./order.go:28:11: error: "address[0]" is not a path of Order: address is a struct, whose fields follow a dot
 ./order.go:29:11: error: "base.zip" is not a path of Order: base is the value as a whole, with nothing under it
 ./order.go:30:11: error: "" is not a path of Order: Add needs a field
-  an error on Order as a whole goes under validate.Base
-./order.go:31:11: error: validate.Index("name", 0) is not a path of Order: ` +
-		`validate.Index needs a slice or an array, not string
-./order.go:32:11: error: validate.Key("items", "x") is not a path of Order: validate.Key needs a map, not []Item
-./order.go:33:12: error: validate.Index("", 0) is not a path of Order: ` +
-		`validate.Index needs a slice or an array, not Order
+  an error on Order as a whole goes under validator.Base
+./order.go:31:11: error: validator.Index("name", 0) is not a path of Order: ` +
+		`validator.Index needs a slice or an array, not string
+./order.go:32:11: error: validator.Key("items", "x") is not a path of Order: validator.Key needs a map, not []Item
+./order.go:33:12: error: validator.Index("", 0) is not a path of Order: ` +
+		`validator.Index needs a slice or an array, not Order
 ./order.go:34:11: error: "virtual" is not a path of Order: Order has no field "virtual"
-  an error on Order as a whole goes under validate.Base
+  an error on Order as a whole goes under validator.Base
 `
 	if diags != want {
 		t.Errorf("diagnostics:\n%s\nwant:\n%s", diags, want)

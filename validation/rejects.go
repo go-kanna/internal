@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// The codes the rules that Rejects tells report, as go-kanna/validate spells
+// The codes the rules that Rejects tells report, as go-kanna/validator spells
 // them.
 var (
 	compareCodes = map[token.Token]string{
@@ -24,7 +24,7 @@ var (
 // Rejects reports whether the checks of v, a field's, reject value, a constant
 // the field could hold, such as its default, by a rule that needs nothing but
 // the value to tell: required, a length, a comparison, oneof, or a pattern. It
-// returns what the rule reports, as go-kanna/validate spells it, such as
+// returns what the rule reports, as go-kanna/validator spells it, such as
 // "greater_than_or_equal_to (count=1)". A rule that runs code of its own, or
 // looks at another field, is left to the run, and so are all the rules of a
 // value whose required or omitempty asks the IsZero method of its type.

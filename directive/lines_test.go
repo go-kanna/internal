@@ -84,7 +84,7 @@ func TestLines(t *testing.T) {
 		t.Errorf("Loose() =\n%q\nwant\n%q", got, want)
 	}
 
-	// //kanna:validte is on a declaration, where kanna-validate tells it.
+	// //kanna:validte is on a declaration, where kanna-validator tells it.
 	if got, want := strs(directive.Unknown(lines)), []string{
 		"p.go:22:1: warning: //kanna:di is a directive of no kanna generator",
 		"p.go:28:1: warning: //kanna:valdte is a directive of no kanna generator\n" +

@@ -31,8 +31,8 @@ and a minor release may break the one before it.
   `rule=model.CompletedAt`, stands for, by the imports of the file it is written in, as Go does in code.
 - [`scan`](./scan): reads the types a package declares, and the fields of its structs.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
-- [`validation`](./validation): knows what a validate tag means, how kanna-validate reads one and what generated code
-  checks of a value by it, for kanna-validate and the generators that check a struct by its tags alike.
+- [`validation`](./validation): knows what a validate tag means, how kanna-validator reads one and what generated code
+  checks of a value by it, for kanna-validator and the generators that check a struct by its tags alike.
 - [`valuetype`](./valuetype): knows the value types kanna-value generates by their shape, and names their accessor and
   constructors, for kanna-value and the generators reading its types alike.
 

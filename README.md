@@ -22,17 +22,17 @@ and a minor release may break the one before it.
   for them, for kanna-value and the generators reading its types alike.
 - [`gofile`](./gofile): assembles one generated file, naming its imports and locals so that none collide.
 - [`output`](./output): writes, removes, or checks what a run generated, never touching a hand-written file, and
-  reads what the destination already declares and requires.
+  reads the names the destination package already declares and the modules its go.mod requires.
 - [`packages`](./packages): loads the packages a generator reads, setting aside its own stale output, reports
-  what went wrong as diagnostics, and type-checks them again as they are once what a run writes is in place.
+  what went wrong as diagnostics, and type-checks them again with what the run writes in place.
 - [`pkgtest`](./pkgtest): builds loaded packages for tests, without putting a module on disk, and compares what a
   generator generates with golden files.
 - [`qualifier`](./qualifier): tells which package a name in a tag or a directive, such as `model` in
   `rule=model.CompletedAt`, stands for, by the imports of the file it is written in, as Go does in code.
 - [`scan`](./scan): reads the types a package declares, and the fields of its structs.
 - [`suggest`](./suggest): finds the name a misspelled one was probably meant to be.
-- [`validation`](./validation): knows what a validate tag means, how kanna-validator reads one and what generated code
-  checks of a value by it, for kanna-validator and the generators that check a struct by its tags alike.
+- [`validation`](./validation): knows how kanna-validator reads a validate tag and what the generated code checks of a
+  value by it, for kanna-validator and the generators that check a struct by its tags alike.
 - [`valuetype`](./valuetype): knows the value types kanna-value generates by their shape, and names their accessor and
   constructors, for kanna-value and the generators reading its types alike.
 

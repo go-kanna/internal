@@ -285,6 +285,11 @@ func (p Planner) value(t types.Type, levels []level, at site, enclosing []types.
 		errs = append(errs, es...)
 	}
 
+	if l.omitEmpty && len(l.rules) == 0 {
+		if err := omitsNothingElse(v, len(below) > 0, at); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	return pruned(v), errs
 }
 
@@ -372,6 +377,28 @@ func omitsNothing(t types.Type, at site) *ruleError {
 	err := ruleErrorf("omitempty does nothing on %s: a nil %s skips every rule but required already",
 		at.typeString(t), kind)
 	err.hint = "remove omitempty"
+	return err
+}
+
+// omitsNothingElse reports omitempty on v, a value with no rule after it at its
+// level, when it skips nothing for the zero value: neither Validate, nor the
+// elements of an array, as a nil slice or map has none to check anyway. dives
+// says rules after a dive check the elements.
+func omitsNothingElse(v *Value, dives bool, at site) *ruleError {
+	if v.nest {
+		return nil
+	}
+	if dives || v.elem != nil {
+		if shapeOf(v.typ) == shapeArray {
+			return nil
+		}
+		err := ruleErrorf("omitempty does nothing on %s without a rule of its own: an empty one has no elements to check",
+			at.typeString(v.typ))
+		err.hint = "remove omitempty"
+		return err
+	}
+	err := ruleErrorf("omitempty does nothing without a rule after it: nothing checks %s", at.typeString(v.typ))
+	err.hint = "remove omitempty, or write after it the rules the zero value is to skip"
 	return err
 }
 

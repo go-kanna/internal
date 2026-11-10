@@ -149,6 +149,14 @@ func TestResolveRule(t *testing.T) {
 		{rule: "oneof=admin member", field: "Kind", want: `oneof("admin","member")`},
 		{rule: "oneof=1 2", field: "I", want: "oneof(1,2)"},
 		{rule: "oneof=pending held", field: "St", want: `oneof("pending","held")`},
+		// Values split as go-playground splits them: at spaces, but for one
+		// quoted in single quotes.
+		{rule: "oneof='red green' blue", field: "S", want: `oneof("red green","blue")`},
+		{rule: "oneof='red green'blue", field: "S", want: `oneof("red green","blue")`},
+		{rule: "oneof=a\tb  c", field: "S", want: `oneof("a","b","c")`},
+		{rule: "oneof='' a", field: "S", want: `oneof("","a")`},
+		{rule: "oneof='1' 2", field: "I", want: "oneof(1,2)"},
+		{rule: "oneof='1s' 1m", field: "D", want: "oneof(1000000000,60000000000)ns"},
 		{rule: "gte=1s", field: "D", want: ">=1000000000ns"},
 		{rule: "lt=1h30m", field: "D", want: "<5400000000000ns"},
 		{rule: "gt=-1.5ms", field: "D", want: ">-1500000ns"},
@@ -180,6 +188,12 @@ func TestResolveRule(t *testing.T) {
 
 // ownRule is the hint of a rule= naming a type that is no rule.
 const ownRule = "for a rule of your own, check the value in the struct's validate(errs *validator.Errors)"
+
+// unclosedQuote and quoteInside are the hints of a oneof with a stray quote.
+const (
+	unclosedQuote = "quote a value in single quotes at both ends, as in oneof='a b' c"
+	quoteInside   = "a value cannot hold a single quote; quotes only enclose a value with spaces"
+)
 
 func TestResolveRule_Errors(t *testing.T) {
 	t.Parallel()
@@ -225,6 +239,28 @@ func TestResolveRule_Errors(t *testing.T) {
 		{rule: "gt=0", field: "B", wantErr: `rule "gt" cannot apply to bool`},
 		{rule: "oneof=1 2", field: "F", wantErr: `rule "oneof" cannot apply to float64`},
 		{rule: "oneof=a b a", field: "S", wantErr: `rule "oneof" lists a twice`},
+		{rule: "oneof='a b' c 'a b'", field: "S", wantErr: `rule "oneof" lists 'a b' twice`},
+		{rule: "oneof=a 'a'", field: "S", wantErr: `rule "oneof" lists 'a' twice`},
+		{
+			rule: "oneof='red green blue", field: "S",
+			wantErr:  `rule "oneof" opens a quote at 'red and never closes it`,
+			wantHint: unclosedQuote,
+		},
+		{
+			rule: "oneof=red 'green", field: "S", wantErr: `rule "oneof" opens a quote at 'green and never closes it`,
+			wantHint: unclosedQuote,
+		},
+		{rule: "oneof='", field: "S", wantErr: `opens a quote at ' and never closes it`, wantHint: unclosedQuote},
+		{
+			rule: "oneof=it's", field: "S", wantErr: `rule "oneof" lists it's, a value with a quote inside`,
+			wantHint: quoteInside,
+		},
+		{rule: "oneof=red green'", field: "S", wantErr: `lists green', a value with a quote inside`, wantHint: quoteInside},
+		{
+			rule: "oneof='pending ' held", field: "St",
+			wantErr: `rule "oneof" lists 'pending ', which no constant of Stage holds`, wantHint: `did you mean "pending"?`,
+		},
+		{rule: "oneof='1 2'", field: "I", wantErr: `rule "oneof" expects a number, got "1 2"`},
 		{
 			rule: "oneof=pending shippd", field: "St",
 			wantErr: `rule "oneof" lists shippd, which no constant of Stage holds`, wantHint: `did you mean "shipped"?`,

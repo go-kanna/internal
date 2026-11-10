@@ -245,9 +245,9 @@ func compare(op token.Token) resolver {
 }
 
 func oneOf(r rule, t types.Type, at site) (check, error) {
-	values := strings.Fields(r.param)
-	if len(values) == 0 {
-		return nil, ruleErrorf("rule %q needs a value, as in %s=…", r.name, r.name)
+	written, values, err := oneOfValues(r)
+	if err != nil {
+		return nil, err
 	}
 
 	s := shapeOf(t)
@@ -257,7 +257,7 @@ func oneOf(r rule, t types.Type, at site) (check, error) {
 
 	duration := isDuration(t)
 	var lits []string
-	for _, v := range values {
+	for i, v := range values {
 		lit := strconv.Quote(v)
 		var err error
 		switch {
@@ -270,17 +270,17 @@ func oneOf(r rule, t types.Type, at site) (check, error) {
 			return nil, err
 		}
 		if slices.Contains(lits, lit) {
-			return nil, ruleErrorf("rule %q lists %s twice", r.name, v)
+			return nil, ruleErrorf("rule %q lists %s twice", r.name, written[i])
 		}
 		lits = append(lits, lit)
 	}
 	if e, ok := enumtype.Of(t); ok {
 		consts := enumValues(e.Named, at.pkg)
-		for _, v := range values {
+		for i, v := range values {
 			if slices.Contains(consts, v) {
 				continue
 			}
-			err := ruleErrorf("rule %q lists %s, which no constant of %s holds", r.name, v, at.typeString(t))
+			err := ruleErrorf("rule %q lists %s, which no constant of %s holds", r.name, written[i], at.typeString(t))
 			if s, ok := suggest.Closest(v, consts); ok {
 				err.hint = fmt.Sprintf("did you mean %q?", s)
 			}
@@ -288,6 +288,42 @@ func oneOf(r rule, t types.Type, at site) (check, error) {
 		}
 	}
 	return oneOfCheck{values: lits, duration: duration}, nil
+}
+
+// oneOfValue matches a value of oneof as go-playground does: one quoted in
+// single quotes, which may hold spaces, or a run of anything but spaces.
+var oneOfValue = regexp.MustCompile(`'[^']*'|\S+`)
+
+// oneOfValues splits the param of r, a oneof, into its values, as they are
+// written and with their quotes removed.
+//
+// go-playground also drops a quote that opens or closes no value, as in 'red or
+// it's; that is an error here, for the value would not be the one written.
+func oneOfValues(r rule) (written, values []string, err error) {
+	for _, v := range oneOfValue.FindAllString(r.param, -1) {
+		value := v
+		if rest, ok := strings.CutPrefix(v, "'"); ok {
+			quoted, closed := strings.CutSuffix(rest, "'")
+			if !closed {
+				return nil, nil, &ruleError{
+					msg:  fmt.Sprintf("rule %q opens a quote at %s and never closes it", r.name, v),
+					hint: fmt.Sprintf("quote a value in single quotes at both ends, as in %s='a b' c", r.name),
+				}
+			}
+			value = quoted
+		} else if strings.Contains(v, "'") {
+			return nil, nil, &ruleError{
+				msg:  fmt.Sprintf("rule %q lists %s, a value with a quote inside", r.name, v),
+				hint: "a value cannot hold a single quote; quotes only enclose a value with spaces",
+			}
+		}
+		written = append(written, v)
+		values = append(values, value)
+	}
+	if len(values) == 0 {
+		return nil, nil, ruleErrorf("rule %q needs a value, as in %s=…", r.name, r.name)
+	}
+	return written, values, nil
 }
 
 // enumValues returns, sorted, the values of the constants of named, an enum,

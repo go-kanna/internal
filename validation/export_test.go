@@ -175,9 +175,9 @@ func describe(c check) string {
 		}
 		return "len" + c.op.String() + strconv.Itoa(c.bound)
 	case compareCheck:
-		return c.op.String() + c.bound
+		return c.op.String() + c.bound + durationUnit(c.duration)
 	case oneOfCheck:
-		return "oneof(" + strings.Join(c.values, ",") + ")"
+		return "oneof(" + strings.Join(c.values, ",") + ")" + durationUnit(c.duration)
 	case confirmCheck:
 		if c.pointer {
 			return "confirms *" + c.field + " as " + c.attribute
@@ -191,6 +191,13 @@ func describe(c check) string {
 		return "rule=" + types.TypeString(c.typ, (*types.Package).Name) + " via " + c.ctor.Name()
 	}
 	return fmt.Sprintf("%#v", c)
+}
+
+func durationUnit(duration bool) string {
+	if duration {
+		return "ns"
+	}
+	return ""
 }
 
 // ParseTag is parseTag with each level spelled as a tag of its own, required

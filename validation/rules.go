@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-kanna/internal/enumtype"
 	"github.com/go-kanna/internal/qualifier"
@@ -42,11 +43,17 @@ type lengthCheck struct {
 type compareCheck struct {
 	op    token.Token
 	bound string
+
+	// duration says the number is a time.Duration, and bound its nanoseconds.
+	duration bool
 }
 
 // oneOfCheck accepts only values, Go literals of the type checked.
 type oneOfCheck struct {
 	values []string
+
+	// duration says the values are of a time.Duration, in nanoseconds.
+	duration bool
 }
 
 // confirmCheck requires the value to equal the struct's field, whose JSON name
@@ -204,11 +211,20 @@ func size(op token.Token) resolver {
 	}
 }
 
-// compare resolves eq, ne, lt, lte, gt, and gte, which compare numbers.
+// compare resolves eq, ne, lt, lte, gt, and gte, which compare numbers. A
+// time.Duration is compared with a duration, such as gte=1s.
 func compare(op token.Token) resolver {
 	return func(r rule, t types.Type, at site) (check, error) {
 		if err := needsValue(r); err != nil {
 			return nil, err
+		}
+
+		if isDuration(t) {
+			bound, err := durationBound(r, r.param)
+			if err != nil {
+				return nil, err
+			}
+			return compareCheck{op: op, bound: bound, duration: true}, nil
 		}
 
 		s := shapeOf(t)
@@ -239,14 +255,19 @@ func oneOf(r rule, t types.Type, at site) (check, error) {
 		return nil, cannotApply(r, t, at)
 	}
 
+	duration := isDuration(t)
 	var lits []string
 	for _, v := range values {
 		lit := strconv.Quote(v)
-		if s == shapeNumber {
-			var err error
-			if lit, err = numberBound(r, v, t, at); err != nil {
-				return nil, err
-			}
+		var err error
+		switch {
+		case duration:
+			lit, err = durationBound(r, v)
+		case s == shapeNumber:
+			lit, err = numberBound(r, v, t, at)
+		}
+		if err != nil {
+			return nil, err
 		}
 		if slices.Contains(lits, lit) {
 			return nil, ruleErrorf("rule %q lists %s twice", r.name, v)
@@ -266,7 +287,7 @@ func oneOf(r rule, t types.Type, at site) (check, error) {
 			return nil, err
 		}
 	}
-	return oneOfCheck{values: lits}, nil
+	return oneOfCheck{values: lits, duration: duration}, nil
 }
 
 // enumValues returns, sorted, the values of the constants of named, an enum,
@@ -404,6 +425,30 @@ func numberBound(r rule, param string, t types.Type, at site) (string, error) {
 		return "", ruleErrorf("rule %q: %s does not fit %s", r.name, param, at.typeString(t))
 	}
 	return param, nil
+}
+
+// durationBound reads param, a duration as time.ParseDuration reads one, such
+// as 1s or 1h30m, and returns its nanoseconds as a Go literal. A number
+// without a unit is no duration.
+func durationBound(r rule, param string) (string, error) {
+	d, err := time.ParseDuration(param)
+	if err != nil {
+		e := ruleErrorf("rule %q expects a duration, such as 1s, got %q", r.name, param)
+		if v := numberOf(param); v.Kind() == constant.Int {
+			if n, exact := constant.Int64Val(v); exact {
+				e.hint = fmt.Sprintf("write it with a unit: %s nanoseconds is %s", param, time.Duration(n))
+			}
+		}
+		return "", e
+	}
+	return strconv.FormatInt(int64(d), 10), nil
+}
+
+// isDuration reports whether t is time.Duration, whose rules count in
+// durations rather than in nanoseconds.
+func isDuration(t types.Type) bool {
+	n, ok := types.Unalias(t).(*types.Named)
+	return ok && n.Obj().Pkg() != nil && n.Obj().Pkg().Path() == "time" && n.Obj().Name() == "Duration"
 }
 
 // numberOf reads param, a number as a rule writes it, or returns an unknown

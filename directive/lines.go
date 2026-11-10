@@ -27,6 +27,11 @@ type Line struct {
 	// Attached reports whether the line is in the doc comment of a
 	// declaration, a field, or a method, where a generator looks for it.
 	Attached bool
+
+	// shape is what the line is the doc of, and typ the type spec Shape
+	// decides by its type, if any.
+	shape Shape
+	typ   *ast.TypeSpec
 }
 
 // Lines returns the //kanna: lines of files, in the order they are written. A
@@ -41,38 +46,14 @@ func Lines(fset *token.FileSet, files []*ast.File) []Line {
 				if !ok || !strings.HasPrefix(body, namespace) {
 					continue
 				}
-				key, _, _ := parse(body)
-				lines = append(lines, Line{Key: key, Pos: fset.Position(c.Slash), Attached: docs[cg]})
+				l := docs[cg]
+				l.Key, _, _ = parse(body)
+				l.Pos = fset.Position(c.Slash)
+				lines = append(lines, l)
 			}
 		}
 	}
 	return lines
-}
-
-// docsOf returns the doc comments of what f declares, down to the fields of
-// its structs and the methods of its interfaces.
-func docsOf(f *ast.File) map[*ast.CommentGroup]bool {
-	docs := make(map[*ast.CommentGroup]bool)
-	ast.Inspect(f, func(n ast.Node) bool {
-		var doc *ast.CommentGroup
-		switch n := n.(type) {
-		case *ast.GenDecl:
-			doc = n.Doc
-		case *ast.FuncDecl:
-			doc = n.Doc
-		case *ast.TypeSpec:
-			doc = n.Doc
-		case *ast.ValueSpec:
-			doc = n.Doc
-		case *ast.Field:
-			doc = n.Doc
-		}
-		if doc != nil {
-			docs[doc] = true
-		}
-		return true
-	})
-	return docs
 }
 
 // Loose warns about each line of lines whose key is among keys, a generator's

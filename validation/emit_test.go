@@ -84,3 +84,41 @@ type Target struct {
 		}
 	}
 }
+
+// TestEmit_ValueAt checks that Body.ValueAt writes the checks of Body.Value
+// under the paths it is given, of more than one segment.
+func TestEmit_ValueAt(t *testing.T) {
+	t.Parallel()
+
+	set, err := packages.Load([]string{"./testdata/emit"}, packages.Config{Regenerated: []string{"validator_gen.go"}})
+	if err != nil || len(set.Diags) > 0 {
+		t.Fatalf("load: %v %v", err, set.Diags)
+	}
+	dir, err := filepath.Abs("testdata/emit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := slices.Sorted(maps.Keys(output.DeclaredNames(dir, "validator_gen.go", set.Packages[0].Name)))
+
+	want, err := validation.Emit(set.Fset, set.Packages, declared)
+	if err != nil {
+		t.Fatalf("emit: %v\n%s", err, want)
+	}
+	got, err := validation.EmitAt(set.Fset, set.Packages, declared, func(rt, name, nestName string) (string, string) {
+		nestPath := rt + ".Path{}"
+		if nestName != "" {
+			nestPath = rt + `.Field("section", ` + nestName + ")"
+		}
+		return rt + `.Field("section", ` + name + ")", nestPath
+	})
+	if err != nil {
+		t.Fatalf("emit: %v\n%s", err, got)
+	}
+
+	if w := strings.ReplaceAll(string(want), "validator.Field(", `validator.Field("section", `); string(got) != w {
+		t.Errorf("ValueAt wrote\n%s\nwant\n%s", got, w)
+	}
+	if !strings.Contains(string(got), `validator.Field("section", `) {
+		t.Error("ValueAt wrote no path of two segments")
+	}
+}

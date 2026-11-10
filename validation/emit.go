@@ -99,11 +99,17 @@ type Body struct {
 // nestName keeps them at the level of the struct, as encoding/json flattens an
 // embedded struct without a JSON name.
 func (b Body) Value(v *Value, expr, name, nestName string) {
-	path := b.m.rt + ".Field(" + name + ")"
 	nestPath := b.m.rt + ".Path{}"
 	if nestName != "" {
 		nestPath = b.m.rt + ".Field(" + nestName + ")"
 	}
+	b.ValueAt(v, expr, b.m.rt+".Field("+name+")", nestPath)
+}
+
+// ValueAt writes the checks of v as Value does, under path and nestPath, Go
+// expressions of a validator.Path, for a field whose path is more than one
+// segment, such as validator.Field("api", "port").
+func (b Body) ValueAt(v *Value, expr, path, nestPath string) {
 	b.m.value(v, place{expr: expr, recv: expr, path: path, nestPath: nestPath}, 0)
 }
 

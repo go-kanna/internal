@@ -42,6 +42,22 @@ func marked(fset *token.FileSet, pkgs []*packages.Package) ([]scan.Struct, Plann
 // each in a Validate method. declared are the top-level names the package
 // declares besides.
 func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]byte, error) {
+	return emit(fset, pkgs, declared, nil)
+}
+
+// EmitAt renders the file as Emit does, but writes each field's checks with
+// Body.ValueAt under the paths at returns for the field's JSON name and its
+// nest name ("" for an embedded struct that encoding/json flattens), given the
+// name the file imports go-kanna/validator under.
+func EmitAt(
+	fset *token.FileSet, pkgs []*packages.Package, declared []string, at func(rt, name, nestName string) (string, string),
+) ([]byte, error) {
+	return emit(fset, pkgs, declared, at)
+}
+
+func emit(
+	fset *token.FileSet, pkgs []*packages.Package, declared []string, at func(rt, name, nestName string) (string, string),
+) ([]byte, error) {
 	structs, p := marked(fset, pkgs)
 	var planned []Planned
 	for _, s := range structs {
@@ -72,6 +88,11 @@ func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]b
 				nestPath = ""
 			}
 			fmt.Fprint(f, "\n")
+			if at != nil {
+				p, np := at(w.Runtime(), strconv.Quote(path), nestPath)
+				body.ValueAt(field.Value, x+"."+field.Name, p, np)
+				continue
+			}
 			body.Value(field.Value, x+"."+field.Name, strconv.Quote(path), nestPath)
 		}
 		fmt.Fprintf(f, "\nreturn %s.Err()\n}\n\n", errs)

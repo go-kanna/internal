@@ -40,6 +40,22 @@ func (s Span) Validate() error {
 	return nil
 }
 
+// Stage is an enum, which validates itself as kanna-value would.
+type Stage string
+
+const (
+	StageDraft  Stage = "draft"
+	StageReview Stage = "review"
+	StageDone   Stage = "done"
+)
+
+func (s Stage) Validate() error {
+	if s != StageDraft && s != StageReview && s != StageDone {
+		return errors.New("inclusion")
+	}
+	return nil
+}
+
 // Checker is an interface whose values validate themselves.
 type Checker interface{ Validate() error }
 
@@ -104,6 +120,7 @@ type Request struct {
 	Shifts   []time.Time      `json:"shifts"    validate:"dive,rule=Since2000"`
 	Timeout  time.Duration    `json:"timeout"   validate:"gte=1s,lte=90m"`
 	Backoff  *time.Duration   `json:"backoff"   validate:"oneof=0 1500ms -1us"`
+	Stage    Stage            `json:"stage"     validate:"oneof=draft review,max=6"`
 	Audit
 }
 

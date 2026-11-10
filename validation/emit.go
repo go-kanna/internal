@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kanna/internal/enumtype"
 	"github.com/go-kanna/internal/gofile"
 )
 
@@ -194,8 +195,19 @@ func (m *method) value(v *Value, at place, depth int) {
 		m.printf("if %s {\n", m.nonZero(v, at))
 	}
 
+	// An enum that oneof rejects is not one of its constants either, which
+	// its Validate would report again.
+	var narrowing *oneOfCheck
+	_, enum := enumtype.Of(v.typ)
 	for _, c := range v.checks {
+		if c, ok := c.(oneOfCheck); ok && enum && v.nest && narrowing == nil {
+			narrowing = &c
+			continue
+		}
 		m.check(c, v.typ, at)
+	}
+	if narrowing != nil {
+		m.printf("if %s {\n%s\n} else {\n", m.oneOfCond(*narrowing, at), m.add(at.path, "Inclusion()"))
 	}
 
 	if v.nest {
@@ -212,6 +224,10 @@ func (m *method) value(v *Value, at place, depth int) {
 			call = fmt.Sprintf("if %s {\n%s}\n", strings.Join(tests, " && "), call)
 		}
 		m.printf("%s", call)
+	}
+
+	if narrowing != nil {
+		m.printf("}\n")
 	}
 
 	if v.elem != nil {
@@ -295,11 +311,7 @@ func (m *method) check(c check, t types.Type, at place) {
 		}
 		m.printf("if %s {\n%s\n}\n", cond, m.add(at.path, compareErrors[c.op]+typeArg+"("+bound+")"))
 	case oneOfCheck:
-		conds := make([]string, len(c.values))
-		for i, v := range c.values {
-			conds[i] = at.expr + " != " + m.bound(v, c.duration)
-		}
-		m.printf("if %s {\n%s\n}\n", strings.Join(conds, " && "), m.add(at.path, "Inclusion()"))
+		m.printf("if %s {\n%s\n}\n", m.oneOfCond(c, at), m.add(at.path, "Inclusion()"))
 	case confirmCheck:
 		other := m.x + "." + c.field
 		test := at.expr + " != " + other
@@ -322,6 +334,15 @@ func (m *method) check(c check, t types.Type, at place) {
 		m.printf("%s.Add(%s, %s)\n", m.errs, at.path, err)
 		m.printf("}\n")
 	}
+}
+
+// oneOfCond is the condition that holds for a value c does not list.
+func (m *method) oneOfCond(c oneOfCheck, at place) string {
+	conds := make([]string, len(c.values))
+	for i, v := range c.values {
+		conds[i] = at.expr + " != " + m.bound(v, c.duration)
+	}
+	return strings.Join(conds, " && ")
 }
 
 // add is the statement recording err, a call into the runtime, at path.

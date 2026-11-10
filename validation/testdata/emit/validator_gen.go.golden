@@ -277,6 +277,15 @@ func (x Request) Validate() error {
 		}
 	}
 
+	if utf8.RuneCountInString(string(x.Stage)) > 6 {
+		errs.Add("stage", validator.TooLong(6))
+	}
+	if x.Stage != "draft" && x.Stage != "review" {
+		errs.Add("stage", validator.Inclusion())
+	} else {
+		errs.Nest("stage", x.Stage.Validate())
+	}
+
 	errs.Nest("", x.Audit.Validate())
 
 	return errs.Err()

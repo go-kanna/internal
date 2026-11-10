@@ -59,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        repository: [config, di, fixture, i18n, mapper, orm, validator, value]
+        repository: [config, di, fixture, i18n, kanna, mapper, orm, validator, value]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -85,15 +85,52 @@ jobs:
           path: generator
 
       # The workspace's Go, which an example may ask a newer one of than the
-      # generator's module does.
+      # generator's module does. kanna has no workspace, so its module's Go.
       - uses: actions/setup-go@v7.0.0
         with:
-          go-version-file: generator/go.work
+          go-version-file: generator/${{ hashFiles('generator/go.work') != '' && 'go.work' || 'go.mod' }}
 
       - name: Use this internal in the generator's workspace
         working-directory: generator
-        run: go work use ../internal
+        run: |
+          [ -f go.work ] || go work init .
+          go work use ../internal
 
       - name: Run the generator's tests
         working-directory: generator
         run: make test
+
+  # A user's module selects one internal for every generator it has as a tool,
+  # so each released generator and kanna has to build with this one too.
+  released:
+    name: released generators
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          path: internal
+
+      # A release may ask a newer Go than this module does.
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+
+      - name: Add the latest release of each generator and kanna as a tool
+        run: |
+          mkdir released && cd released
+          go mod init example.com/released
+          go mod edit -replace github.com/go-kanna/internal=../internal
+          go get -tool \
+            github.com/go-kanna/kanna@latest \
+            github.com/go-kanna/config/cmd/kanna-config@latest \
+            github.com/go-kanna/di/cmd/kanna-di@latest \
+            github.com/go-kanna/fixture/cmd/kanna-fixture@latest \
+            github.com/go-kanna/i18n/cmd/kanna-i18n@latest \
+            github.com/go-kanna/mapper/cmd/kanna-mapper@latest \
+            github.com/go-kanna/orm/cmd/kanna-orm@latest \
+            github.com/go-kanna/validator/cmd/kanna-validator@latest \
+            github.com/go-kanna/value/cmd/kanna-value@latest
+
+      - name: Build them with this internal
+        working-directory: released
+        run: go build tool

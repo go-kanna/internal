@@ -48,7 +48,9 @@ var (
 
 	for name, want := range map[string]qualifier.Error{
 		// The file calls net/http h, and only b.go imports net/netip.
-		"http":    {Msg: "the file imports no package named http", Hint: "import it, as _ if nothing else uses it"},
+		"http": {Msg: "the file imports no package named http", Hint: "the file imports net/http, which it calls h; write h"},
+		// math/rand/v2 goes by rand, which the file calls math/rand too.
+		"v2":      {Msg: "the file imports no package named v2", Hint: "import it, as _ if nothing else uses it"},
 		"netip":   {Msg: "the file imports no package named netip", Hint: "import it, as _ if nothing else uses it"},
 		"tme":     {Msg: "the file imports no package named tme", Hint: "did you mean time?"},
 		"strings": {Msg: "the file imports no package named strings", Hint: "import it, as _ if nothing else uses it"},

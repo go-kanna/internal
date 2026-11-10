@@ -110,9 +110,10 @@ jobs:
         with:
           path: internal
 
+      # A release may ask a newer Go than this module does.
       - uses: actions/setup-go@v7.0.0
         with:
-          go-version-file: internal/go.mod
+          go-version: stable
 
       - name: Add the latest release of each generator and kanna as a tool
         run: |

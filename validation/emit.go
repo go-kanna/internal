@@ -277,13 +277,13 @@ func (m *method) elem(v *Value, at place, depth int) {
 		}
 		m.printf("for _, %s := range %s {\n%s := %s[%s]\n", k, keys, val, paren(at.expr), k)
 		elem.expr, elem.recv = val, val
-		elem.path = fmt.Sprintf("%s.Key(%s, %s)", m.rt, at.path, k)
+		elem.path = fmt.Sprintf("%s.Key(%s)", at.path, k)
 	} else {
 		i := m.loopVar("i", depth)
 		m.printf("for %s := range %s {\n", i, at.expr)
 		elem.expr = paren(at.expr) + "[" + i + "]"
 		elem.recv = elem.expr
-		elem.path = fmt.Sprintf("%s.Index(%s, %s)", m.rt, at.path, i)
+		elem.path = fmt.Sprintf("%s.Index(%s)", at.path, i)
 	}
 	elem.nestPath = elem.path
 	m.value(v.elem, elem, depth+1)

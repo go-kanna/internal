@@ -209,6 +209,9 @@ func size(op token.Token) resolver {
 			if err != nil || n < 0 {
 				return nil, ruleErrorf("rule %q expects a length, got %q", r.name, r.param)
 			}
+			if op == token.GEQ && n == 0 {
+				return nil, &ruleError{msg: fmt.Sprintf("%s checks nothing: no length is below 0", r), hint: "remove it"}
+			}
 			return lengthCheck{op: op, bound: n, runes: s == shapeString}, nil
 		case shapeArray:
 			return nil, ruleErrorf("rule %q cannot apply to %s, whose length is fixed", r.name, at.typeString(t))
@@ -236,6 +239,9 @@ func compare(op token.Token) resolver {
 			if err != nil {
 				return nil, err
 			}
+			if err := decidedByType(r, op, bound, t, at); err != nil {
+				return nil, err
+			}
 			return compareCheck{op: op, bound: bound, duration: true}, nil
 		}
 
@@ -243,6 +249,9 @@ func compare(op token.Token) resolver {
 		if s == shapeNumber {
 			bound, err := numberBound(r, r.param, t, at)
 			if err != nil {
+				return nil, err
+			}
+			if err := decidedByType(r, op, bound, t, at); err != nil {
 				return nil, err
 			}
 			return compareCheck{op: op, bound: bound}, nil
@@ -483,6 +492,46 @@ func numberBound(r rule, param string, t types.Type, at site) (string, error) {
 		return "", ruleErrorf("rule %q: %s does not fit %s", r.name, param, at.typeString(t))
 	}
 	return param, nil
+}
+
+// decidedByType explains a comparison of an integer with bound that its type
+// decides alone, at an end of what the type holds: one every value passes, as
+// gte=0 on a uint or lte=255 on a uint8, or one none does, as gt=255 on a
+// uint8. A float has no such end, as it holds the infinities, which compare
+// beyond any bound.
+func decidedByType(r rule, op token.Token, bound string, t types.Type, at site) error {
+	lo, hi, ok := intRange(t)
+	if !ok {
+		return nil
+	}
+	v, typ := numberOf(bound), at.typeString(t)
+	atEnd := func(end constant.Value) bool { return constant.Compare(v, token.EQL, end) }
+	switch {
+	case op == token.GEQ && atEnd(lo):
+		return &ruleError{msg: fmt.Sprintf("%s checks nothing: no %s is below %s", r, typ, r.param), hint: "remove it"}
+	case op == token.LEQ && atEnd(hi):
+		return &ruleError{msg: fmt.Sprintf("%s checks nothing: no %s is above %s", r, typ, r.param), hint: "remove it"}
+	case op == token.LSS && atEnd(lo):
+		return ruleErrorf("no %s passes %s: none is below %s", typ, r, r.param)
+	case op == token.GTR && atEnd(hi):
+		return ruleErrorf("no %s passes %s: none is above %s", typ, r, r.param)
+	}
+	return nil
+}
+
+// intRange returns the least and the greatest value of t, an integer type,
+// taking int, uint, and uintptr to be 64 bits wide, as fits does.
+func intRange(t types.Type) (lo, hi constant.Value, ok bool) {
+	b, ok := t.Underlying().(*types.Basic)
+	if !ok || b.Info()&types.IsInteger == 0 {
+		return nil, nil, false
+	}
+	bits := 8 * types.SizesFor("gc", "amd64").Sizeof(b)
+	if b.Info()&types.IsUnsigned != 0 {
+		return constant.MakeUint64(0), constant.MakeUint64(math.MaxUint64 >> (64 - bits)), true
+	}
+	least := int64(-1) << (bits - 1)
+	return constant.MakeInt64(least), constant.MakeInt64(-(least + 1)), true
 }
 
 // durationBound reads param, a duration as time.ParseDuration reads one, such

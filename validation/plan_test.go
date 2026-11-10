@@ -49,6 +49,7 @@ type Request struct {
 	Items    []Item           ` + "`json:\"items\" validate:\"min=1\"`" + `
 	Labels   map[string]*Item ` + "`json:\"labels\"`" + `
 	Grid     [2]Item          ` + "`json:\"grid\"`" + `
+	OptGrid  [2]string        ` + "`json:\"opt_grid\" validate:\"omitempty,dive,required\"`" + `
 	Matrix   [][]int          ` + "`json:\"matrix\" validate:\"dive,dive,gte=0\"`" + `
 	Picks    *[]string        ` + "`json:\"picks\" validate:\"dive,required\"`" + `
 	Checked  Checked          ` + "`json:\"checked\"`" + `
@@ -131,6 +132,7 @@ func TestPlans(t *testing.T) {
 			`Items(items): len>=1 []{nest}`,
 			`Labels(labels): []{*{nest}}`,
 			`Grid(grid): []{nest}`,
+			`OptGrid(opt_grid): omitempty=={} []{required==""}`,
 			`Matrix(matrix): []{[]{>=0}}`,
 			`Picks(picks): *{[]{required==""}}`,
 			`Done(done): *{rule=test.Past via NewPast}`,
@@ -279,6 +281,28 @@ func TestPlans_Errors(t *testing.T) {
 			field: "Err error `validate:\"omitempty\"`",
 			want: "omitempty does nothing on error: a nil interface skips every rule but required already (field Err)\n" +
 				"  remove omitempty",
+		},
+		{
+			name:  "omitempty with no rule after it",
+			field: "Note string `validate:\"omitempty\"`",
+			want: "omitempty does nothing without a rule after it: nothing checks string (field Note)\n" +
+				"  remove omitempty, or write after it the rules the zero value is to skip",
+		},
+		{
+			name:  "omitempty on a slice before dive",
+			field: "Tags []string `validate:\"omitempty,dive,required\"`",
+			want: "omitempty does nothing on []string without a rule of its own: an empty one has no elements to check " +
+				"(field Tags)\n  remove omitempty",
+		},
+		{
+			name:  "omitempty on a slice of what validates itself",
+			field: "Items []Item `validate:\"omitempty\"`\n}\n\ntype Item struct{}\n\nfunc (Item) Validate() error { return nil",
+			want:  "omitempty does nothing on []Item without a rule of its own",
+		},
+		{
+			name:  "omitempty after dive",
+			field: "Tags [][]string `validate:\"dive,omitempty,dive,required\"`",
+			want:  "omitempty does nothing on []string without a rule of its own",
 		},
 		{
 			name:  "eqfield after dive",

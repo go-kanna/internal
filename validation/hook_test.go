@@ -71,12 +71,16 @@ func writeModule(t *testing.T, files map[string]string) string {
 // //kanna:validate, as kanna-validator does, and checks its paths. It returns
 // the structs by name, with " (hook)" after one that has a hook, and each
 // diagnostic as diag.Diag.String spells it, with the files named from dir.
+// Like kanna-validator, it goes on past the type errors of the module.
 func hooks(t *testing.T, dir string) ([]string, string) {
 	t.Helper()
 
 	set, err := packages.Load([]string{"."}, packages.Config{Dir: dir, TypesInfo: true})
-	if err != nil || len(set.Diags) > 0 {
-		t.Fatalf("load: %v %v", err, set.Diags)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if blocking, _ := set.Split(); len(blocking) > 0 {
+		t.Fatalf("load: %v", blocking)
 	}
 
 	var (
@@ -383,6 +387,116 @@ func (o Order) validate(errs *validator.Errors) {
 ./order.go:40:11: error: validator.Field("items").Index(0).Field("base", "x") is not a path of Order: ` +
 		`items[0].base is the value as a whole, with nothing under it
 ./order.go:41:11: error: "labels.x" is not a path of Order: labels is a map, whose values go under Path.Key
+`
+	if diags != want {
+		t.Errorf("diagnostics:\n%s\nwant:\n%s", diags, want)
+	}
+}
+
+func TestHookPaths_String(t *testing.T) {
+	t.Parallel()
+
+	dir := writeModule(t, map[string]string{
+		"types.go": hookTypes,
+		"order.go": `package app
+
+import "github.com/go-kanna/validator"
+
+//kanna:validate
+type Order struct {
+	ID      string  ` + "`json:\"id\"`" + `
+	Address Address ` + "`json:\"address\"`" + `
+	Items   []Item  ` + "`json:\"items\"`" + `
+}
+
+const id = "id"
+
+func (o Order) validate(errs *validator.Errors) {
+	errs.Add("id", nil)
+	errs.Add(id, nil)
+	errs.Nest("address.zip", nil)
+	errs.Add("base", nil)
+	errs.Add("", nil)
+	errs.Nest("", nil)
+	errs.Add("items[0].sku", nil)
+}
+`,
+	})
+
+	_, diags := hooks(t, dir)
+	want := `./order.go:15:11: error: "id" is not a path of Order: Add takes a validator.Path, not a string
+  write validator.Field("id")
+./order.go:16:11: error: id is not a path of Order: Add takes a validator.Path, not a string
+  write validator.Field("id")
+./order.go:17:12: error: "address.zip" is not a path of Order: Nest takes a validator.Path, not a string
+  write validator.Field("address", "zip")
+./order.go:18:11: error: "base" is not a path of Order: Add takes a validator.Path, not a string
+  write validator.Base
+./order.go:19:11: error: "" is not a path of Order: Add takes a validator.Path, not a string
+  an error on Order as a whole goes under validator.Base
+./order.go:20:12: error: "" is not a path of Order: Nest takes a validator.Path, not a string
+  write validator.Path{}
+./order.go:21:11: error: "items[0].sku" is not a path of Order: Add takes a validator.Path, not a string
+  write it with validator.Field and the methods of Path, as in validator.Field("items").Index(0).Field("sku")
+`
+	if diags != want {
+		t.Errorf("diagnostics:\n%s\nwant:\n%s", diags, want)
+	}
+}
+
+func TestHookPaths_Key(t *testing.T) {
+	t.Parallel()
+
+	dir := writeModule(t, map[string]string{
+		"types.go": hookTypes,
+		"order.go": `package app
+
+import "github.com/go-kanna/validator"
+
+type pair struct {
+	tags []string
+}
+
+type point struct{ x, y int }
+
+//kanna:validate
+type Order[K comparable, T any] struct {
+	Labels map[string]Item ` + "`json:\"labels\"`" + `
+	ByKey  map[K]T         ` + "`json:\"by_key\"`" + `
+}
+
+func (o Order[K, T]) validate(errs *validator.Errors) {
+	var (
+		tags []string
+		set  map[string]bool
+		fn   func()
+		p    pair
+		arr  [1][]string
+		any_ any
+		pt   point
+		k    K
+		v    T
+	)
+	errs.Add(validator.Field("labels").Key(tags), nil)
+	errs.Add(validator.Field("labels").Key(set).Field("sku"), nil)
+	errs.Nest(validator.Field("labels").Key(fn), nil)
+	errs.Add(validator.Field("labels").Key(p), nil)
+	errs.Add(validator.Field("labels").Key(arr), nil)
+	errs.Add(validator.Field("labels").Key(any_), nil)
+	errs.Add(validator.Field("labels").Key(pt), nil)
+	errs.Add(validator.Field("labels").Key(1), nil)
+	errs.Add(validator.Field("by_key").Key(k), nil)
+	errs.Add(validator.Field("by_key").Key(v), nil)
+}
+`,
+	})
+
+	_, diags := hooks(t, dir)
+	want := `./order.go:29:41: error: Path.Key panics on tags, as []string is not comparable
+./order.go:30:41: error: Path.Key panics on set, as map[string]bool is not comparable
+./order.go:31:42: error: Path.Key panics on fn, as func() is not comparable
+./order.go:32:41: error: Path.Key panics on p, as pair is not comparable
+./order.go:33:41: error: Path.Key panics on arr, as [1][]string is not comparable
 `
 	if diags != want {
 		t.Errorf("diagnostics:\n%s\nwant:\n%s", diags, want)

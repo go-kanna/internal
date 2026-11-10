@@ -50,6 +50,7 @@ type Fields struct {
 	U16   uint16
 	R     rune
 	St    Stage
+	D     time.Duration
 }
 
 // Deadline is a value type as kanna-value generates one, down to what rule=
@@ -148,6 +149,11 @@ func TestResolveRule(t *testing.T) {
 		{rule: "oneof=admin member", field: "Kind", want: `oneof("admin","member")`},
 		{rule: "oneof=1 2", field: "I", want: "oneof(1,2)"},
 		{rule: "oneof=pending held", field: "St", want: `oneof("pending","held")`},
+		{rule: "gte=1s", field: "D", want: ">=1000000000ns"},
+		{rule: "lt=1h30m", field: "D", want: "<5400000000000ns"},
+		{rule: "gt=-1.5ms", field: "D", want: ">-1500000ns"},
+		{rule: "ne=0", field: "D", want: "!=0ns"},
+		{rule: "oneof=1s 1m", field: "D", want: "oneof(1000000000,60000000000)ns"},
 		{rule: `pattern=^\d{3}-\d{4}$`, field: "S", want: `pattern(^\d{3}-\d{4}$)`},
 		{rule: "email", field: "S", want: "rule.Email"},
 		{rule: "url", field: "Kind", want: "rule.URL"},
@@ -224,6 +230,23 @@ func TestResolveRule_Errors(t *testing.T) {
 			wantErr: `rule "oneof" lists shippd, which no constant of Stage holds`, wantHint: `did you mean "shipped"?`,
 		},
 		{rule: "oneof=1 300", field: "Years", wantErr: "300 does not fit Age"},
+		// A duration is written as time.ParseDuration reads one, never in
+		// nanoseconds.
+		{
+			rule: "gte=1000000000", field: "D", wantErr: `rule "gte" expects a duration, such as 1s, got "1000000000"`,
+			wantHint: "write it with a unit: 1000000000 nanoseconds is 1s",
+		},
+		{rule: "lte=1.5", field: "D", wantErr: `rule "lte" expects a duration, such as 1s, got "1.5"`},
+		{rule: "gt=soon", field: "D", wantErr: `rule "gt" expects a duration, such as 1s, got "soon"`},
+		{
+			rule: "oneof=1s 90", field: "D", wantErr: `rule "oneof" expects a duration, such as 1s, got "90"`,
+			wantHint: "write it with a unit: 90 nanoseconds is 90ns",
+		},
+		{rule: "oneof=1s 1000ms", field: "D", wantErr: `rule "oneof" lists 1000ms twice`},
+		{
+			rule: "min=1s", field: "D", wantErr: `rule "min" cannot apply to time.Duration`,
+			wantHint: "compare a number with gte",
+		},
 		{rule: "pattern=[a-z", field: "S", wantErr: "invalid pattern: error parsing regexp: missing closing ]"},
 		{rule: "pattern=^a$", field: "I", wantErr: `rule "pattern" cannot apply to int`},
 		{rule: "email", field: "I", wantErr: `rule "email" cannot apply to int`},

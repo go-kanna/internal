@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-kanna/internal/gofile"
 )
@@ -276,18 +277,22 @@ func (m *method) check(c check, t types.Type, at place) {
 		m.printf("if %s %s %d {\n%s\n}\n", n, breaking[c.op], c.bound,
 			m.add(at.path, fmt.Sprintf("%s(%d)", lengthErrors[c.op], c.bound)))
 	case compareCheck:
-		cond := at.expr + " " + breaking[c.op].String() + " " + c.bound
+		bound := m.bound(c.bound, c.duration)
+		cond := at.expr + " " + breaking[c.op].String() + " " + bound
 		if isFloat(t) {
 			// NaN compares false with everything, so it meets neither a
 			// requirement nor its opposite: the requirement itself is negated.
-			cond = "!(" + at.expr + " " + c.op.String() + " " + c.bound + ")"
+			cond = "!(" + at.expr + " " + c.op.String() + " " + bound + ")"
 		}
-		m.printf("if %s {\n%s\n}\n", cond,
-			m.add(at.path, compareErrors[c.op]+m.typeArg(c.bound, t)+"("+c.bound+")"))
+		typeArg := ""
+		if !c.duration {
+			typeArg = m.typeArg(c.bound, t)
+		}
+		m.printf("if %s {\n%s\n}\n", cond, m.add(at.path, compareErrors[c.op]+typeArg+"("+bound+")"))
 	case oneOfCheck:
 		conds := make([]string, len(c.values))
 		for i, v := range c.values {
-			conds[i] = at.expr + " != " + v
+			conds[i] = at.expr + " != " + m.bound(v, c.duration)
 		}
 		m.printf("if %s {\n%s\n}\n", strings.Join(conds, " && "), m.add(at.path, "Inclusion()"))
 	case confirmCheck:
@@ -317,6 +322,43 @@ func (m *method) check(c check, t types.Type, at place) {
 // add is the statement recording err, a call into the runtime, at path.
 func (m *method) add(path, err string) string {
 	return fmt.Sprintf("%s.Add(%s, %s.%s)", m.errs, path, m.rt, err)
+}
+
+// bound is lit, a Go literal a rule compares with, as the generated code
+// writes it: the nanoseconds of a time.Duration in the largest unit they are a
+// whole number of, such as 90 * time.Second, which has type time.Duration.
+func (m *method) bound(lit string, duration bool) string {
+	if !duration {
+		return lit
+	}
+	n, err := strconv.ParseInt(lit, 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("emit: duration %q is not in nanoseconds", lit))
+	}
+	timePkg := m.f.Import("time", "time")
+	d := time.Duration(n)
+	if d == 0 {
+		return timePkg + ".Duration(0)"
+	}
+	for _, u := range []struct {
+		d    time.Duration
+		name string
+	}{
+		{time.Hour, "Hour"}, {time.Minute, "Minute"}, {time.Second, "Second"},
+		{time.Millisecond, "Millisecond"}, {time.Microsecond, "Microsecond"}, {time.Nanosecond, "Nanosecond"},
+	} {
+		if d%u.d != 0 {
+			continue
+		}
+		unit := timePkg + "." + u.name
+		if n := d / u.d; n == 1 {
+			return unit
+		} else if n == -1 {
+			return "-" + unit
+		}
+		return fmt.Sprintf("%d * %s", d/u.d, unit)
+	}
+	panic("unreachable")
 }
 
 // typeArg is the type argument a numeric error needs so that the count it

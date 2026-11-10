@@ -4,6 +4,7 @@ import (
 	"go/constant"
 	"go/token"
 	"testing"
+	"time"
 
 	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/pkgtest"
@@ -15,6 +16,8 @@ func TestRejects(t *testing.T) {
 	t.Parallel()
 
 	pkg := pkgtest.Load(t, map[string]string{"test.go": `package test
+
+import "time"
 
 type Settings struct {
 	Name    string ` + "`validate:\"required,min=2,max=5\"`" + `
@@ -28,6 +31,8 @@ type Settings struct {
 	Confirm string ` + "`validate:\"eqfield=Other\"`" + `
 	Level   Level  ` + "`validate:\"required\"`" + `
 	Host    Host   ` + "`validate:\"omitempty,min=5\"`" + `
+	Timeout time.Duration ` + "`validate:\"gte=1s,lte=1h\"`" + `
+	Backoff time.Duration ` + "`validate:\"oneof=0 500ms\"`" + `
 }
 
 // Level counts from 0, which its IsZero does not take for unset.
@@ -76,6 +81,12 @@ func (h Host) IsZero() bool { return h == "" || h == "none" }
 		{field: "Confirm", value: constant.MakeString("x"), want: ""},
 		{field: "Level", value: constant.MakeInt64(0), want: ""},
 		{field: "Host", value: constant.MakeString("none"), want: ""},
+		// A duration is held in nanoseconds, and reported as it is written.
+		{field: "Timeout", value: constant.MakeInt64(int64(time.Minute)), want: ""},
+		{field: "Timeout", value: constant.MakeInt64(int64(time.Millisecond)), want: "greater_than_or_equal_to (count=1s)"},
+		{field: "Timeout", value: constant.MakeInt64(int64(2 * time.Hour)), want: "less_than_or_equal_to (count=1h0m0s)"},
+		{field: "Backoff", value: constant.MakeInt64(int64(500 * time.Millisecond)), want: ""},
+		{field: "Backoff", value: constant.MakeInt64(int64(time.Second)), want: "inclusion"},
 	}
 	for _, tt := range tests {
 		got, ok := validation.Rejects(values[tt.field], tt.value)

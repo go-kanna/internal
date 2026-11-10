@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"time"
 	"unicode/utf8"
 )
 
@@ -25,7 +26,8 @@ var (
 // the field could hold, such as its default, by a rule that needs nothing but
 // the value to tell: required, a length, a comparison, oneof, or a pattern. It
 // returns what the rule reports, as go-kanna/validator spells it, such as
-// "greater_than_or_equal_to (count=1)". A rule that runs code of its own, or
+// "greater_than_or_equal_to (count=1)", or "(count=1s)" for a time.Duration,
+// which value holds in nanoseconds. A rule that runs code of its own, or
 // looks at another field, is left to the run, and so are all the rules of a
 // value whose required or omitempty asks the IsZero method of its type.
 func Rejects(v *Value, value constant.Value) (string, bool) {
@@ -68,7 +70,12 @@ func rejects(c check, value constant.Value) (string, bool) {
 			return "", false
 		}
 		if !constant.Compare(value, c.op, bound) {
-			return fmt.Sprintf("%s (count=%s)", compareCodes[c.op], c.bound), true
+			count := c.bound
+			if c.duration {
+				n, _ := constant.Int64Val(bound)
+				count = time.Duration(n).String()
+			}
+			return fmt.Sprintf("%s (count=%s)", compareCodes[c.op], count), true
 		}
 	case oneOfCheck:
 		if !slices.ContainsFunc(c.values, func(lit string) bool { return same(value, lit) }) {

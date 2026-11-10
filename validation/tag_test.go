@@ -51,6 +51,8 @@ func TestParseTag(t *testing.T) {
 			want: []string{"required"},
 		},
 		{name: "a key ending in validate", tag: `xvalidate:"pattern=^\d$"`, want: nil},
+		{name: "no space before the key", tag: `json:"c"validate:"required"`, want: []string{"required"}},
+		{name: "validate inside another value", tag: `doc:"Validate: \"x\" validate: y"`, want: nil},
 	}
 
 	for _, tt := range tests {
@@ -78,6 +80,12 @@ func TestParseTag_Errors(t *testing.T) {
 	}{
 		{name: "unescaped backslash", tag: `json:"zip" validate:"pattern=^\d+$"`, want: `write a backslash as \\`},
 		{name: "unterminated", tag: `validate:"required`, want: "is not a valid quoted string"},
+		{name: "space after the colon", tag: `json:"b" validate: "required"`, want: "a space around its colon"},
+		{name: "space before the colon", tag: `validate :"required"`, want: "a space around its colon"},
+		{name: "upper case", tag: `json:"d" Validate:"required"`, want: "key Validate is not read"},
+		{name: "given twice", tag: `validate:"required" validate:"max=3"`, want: "a validate key twice"},
+		{name: "given twice in two cases", tag: `validate:"required" VALIDATE:"max=3"`, want: "a validate key twice"},
+		{name: "malformed before", tag: `json: "x" validate:"required"`, want: "malformed before the validate key"},
 		{name: "trailing comma", tag: validateTag("required,"), want: "empty rule; check for a stray comma"},
 		{name: "leading comma", tag: validateTag(",required"), want: "empty rule"},
 		{name: "double comma", tag: validateTag("required,,max=5"), want: "empty rule"},
@@ -129,6 +137,8 @@ func TestHasTag(t *testing.T) {
 		{name: "empty", tag: validateTag(""), want: true},
 		{name: "not a valid quoted string", tag: `json:"zip" validate:"pattern=^\d+$"`, want: true},
 		{name: "a key ending in validate", tag: `xvalidate:"required"`, want: false},
+		{name: "upper case", tag: `Validate:"required"`, want: true},
+		{name: "a space after the colon", tag: `validate: "required"`, want: true},
 	}
 
 	for _, tt := range tests {

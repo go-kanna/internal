@@ -178,7 +178,10 @@ func (p Planner) Struct(s scan.Struct) ([]Field, []diag.Diag) {
 				"pattern= takes the rest of the tag as its regular expression, so %q is part of it (field %s)", rest, f.Name).
 				WithHints("write pattern= last, after the other rules"))
 		}
-		at := site{pkg: own, imports: imports, fields: slices.Delete(slices.Clone(fields), i, i+1)}
+		at := site{
+			pkg: own, imports: imports, fields: slices.Delete(slices.Clone(fields), i, i+1),
+			self: f.Name, owner: s.Named,
+		}
 		v, errs := p.field(f, at)
 		for _, err := range errs {
 			diags = append(diags, fieldDiag(f, err))

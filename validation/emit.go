@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kanna/internal/enumtype"
 	"github.com/go-kanna/internal/gofile"
 )
 
@@ -194,8 +195,19 @@ func (m *method) value(v *Value, at place, depth int) {
 		m.printf("if %s {\n", m.nonZero(v, at))
 	}
 
+	// An enum that oneof rejects is not one of its constants either, which
+	// its Validate would report again.
+	var narrowing *oneOfCheck
+	_, enum := enumtype.Of(v.typ)
 	for _, c := range v.checks {
+		if c, ok := c.(oneOfCheck); ok && enum && v.nest && narrowing == nil {
+			narrowing = &c
+			continue
+		}
 		m.check(c, v.typ, at)
+	}
+	if narrowing != nil {
+		m.printf("if %s {\n%s\n} else {\n", m.oneOfCond(*narrowing, at), m.add(at.path, "Inclusion()"))
 	}
 
 	if v.nest {
@@ -212,6 +224,10 @@ func (m *method) value(v *Value, at place, depth int) {
 			call = fmt.Sprintf("if %s {\n%s}\n", strings.Join(tests, " && "), call)
 		}
 		m.printf("%s", call)
+	}
+
+	if narrowing != nil {
+		m.printf("}\n")
 	}
 
 	if v.elem != nil {
@@ -241,18 +257,18 @@ func (m *method) pointer(v *Value, at place, depth int) {
 // elem loops over the elements of a slice or array, or the values of a map,
 // and writes v.elem for each.
 //
-// A map whose keys have an order is walked in it, so that its errors come out
-// in the same order on every run.
+// A map is walked in the order of its keys, or of their paths for keys
+// without an order, such as structs, so that its errors come out in the same
+// order on every run.
 func (m *method) elem(v *Value, at place, depth int) {
 	elem := at
 	if mt, ok := v.typ.Underlying().(*types.Map); ok {
 		k, val := m.loopVar("k", depth), m.loopVar("v", depth)
+		keys := m.rt + ".SortedKeys(" + at.expr + ")"
 		if isOrdered(mt.Key()) {
-			m.printf("for _, %s := range %s.Sorted(%s.Keys(%s)) {\n%s := %s[%s]\n",
-				k, m.f.Import("slices", "slices"), m.f.Import("maps", "maps"), at.expr, val, paren(at.expr), k)
-		} else {
-			m.printf("for %s, %s := range %s {\n", k, val, at.expr)
+			keys = m.f.Import("slices", "slices") + ".Sorted(" + m.f.Import("maps", "maps") + ".Keys(" + at.expr + "))"
 		}
+		m.printf("for _, %s := range %s {\n%s := %s[%s]\n", k, keys, val, paren(at.expr), k)
 		elem.expr, elem.recv = val, val
 		elem.path = fmt.Sprintf("%s.Key(%s, %s)", m.rt, at.path, k)
 	} else {
@@ -279,7 +295,12 @@ func (m *method) check(c check, t types.Type, at place) {
 	case compareCheck:
 		bound := m.bound(c.bound, c.duration)
 		cond := at.expr + " " + breaking[c.op].String() + " " + bound
-		if isFloat(t) {
+		switch {
+		case isFloat(t) && c.op == token.NEQ:
+			// NaN differs from every number, so it meets ne unless tested
+			// for.
+			cond += " || " + m.f.Import("math", "math") + ".IsNaN(" + asFloat64(at.expr, t) + ")"
+		case isFloat(t):
 			// NaN compares false with everything, so it meets neither a
 			// requirement nor its opposite: the requirement itself is negated.
 			cond = "!(" + at.expr + " " + c.op.String() + " " + bound + ")"
@@ -290,11 +311,7 @@ func (m *method) check(c check, t types.Type, at place) {
 		}
 		m.printf("if %s {\n%s\n}\n", cond, m.add(at.path, compareErrors[c.op]+typeArg+"("+bound+")"))
 	case oneOfCheck:
-		conds := make([]string, len(c.values))
-		for i, v := range c.values {
-			conds[i] = at.expr + " != " + m.bound(v, c.duration)
-		}
-		m.printf("if %s {\n%s\n}\n", strings.Join(conds, " && "), m.add(at.path, "Inclusion()"))
+		m.printf("if %s {\n%s\n}\n", m.oneOfCond(c, at), m.add(at.path, "Inclusion()"))
 	case confirmCheck:
 		other := m.x + "." + c.field
 		test := at.expr + " != " + other
@@ -317,6 +334,15 @@ func (m *method) check(c check, t types.Type, at place) {
 		m.printf("%s.Add(%s, %s)\n", m.errs, at.path, err)
 		m.printf("}\n")
 	}
+}
+
+// oneOfCond is the condition that holds for a value c does not list.
+func (m *method) oneOfCond(c oneOfCheck, at place) string {
+	conds := make([]string, len(c.values))
+	for i, v := range c.values {
+		conds[i] = at.expr + " != " + m.bound(v, c.duration)
+	}
+	return strings.Join(conds, " && ")
 }
 
 // add is the statement recording err, a call into the runtime, at path.
@@ -444,6 +470,15 @@ func asString(expr string, t types.Type) string {
 		return expr
 	}
 	return "string(" + expr + ")"
+}
+
+// asFloat64 converts expr, a floating-point number of type t, to the float64
+// math takes.
+func asFloat64(expr string, t types.Type) string {
+	if types.Identical(types.Unalias(t), types.Typ[types.Float64]) {
+		return expr
+	}
+	return "float64(" + expr + ")"
 }
 
 // isOrdered reports whether values of t can be sorted with <.

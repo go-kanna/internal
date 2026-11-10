@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -105,21 +106,98 @@ func ruleAfterPattern(tag reflect.StructTag) (string, bool) {
 
 // lookup returns the validate tag in tag and whether there is one.
 //
-// A tag that is there but is not a valid quoted string is an error. reflect
-// treats it as absent, so without this check a field whose tag says
-// `validate:"pattern=^\d+$"` would quietly go unchecked: inside a struct tag the
-// value is a Go string literal, and \d is not an escape it knows.
+// A validate key that reflect cannot read is an error, rather than a tag to
+// skip: without the check, a field whose tag says `validate:"pattern=^\d+$"`,
+// `validate: "required"`, or `Validate:"required"` would quietly go unchecked.
+// So is a second validate key, which reflect never reads.
 func lookup(tag reflect.StructTag) (string, bool, error) {
-	if s, ok := tag.Lookup(tagKey); ok {
-		return s, true, nil
+	s, ok := tag.Lookup(tagKey)
+	keys := validateKeys(tag)
+	switch {
+	case len(keys) > 1:
+		return "", true, &ruleError{
+			msg:  "the struct tag has a validate key twice, and only the first is read",
+			hint: "write the rules in one validate tag, separated by commas",
+		}
+	case ok || len(keys) == 0:
+		return s, ok, nil
 	}
-	if key := tagKey + `:"`; !strings.HasPrefix(string(tag), key) && !strings.Contains(string(tag), " "+key) {
-		return "", false, nil
-	}
-	if strings.Contains(string(tag), `\`) {
+
+	switch k := keys[0]; {
+	case k.name != tagKey:
+		return "", true, &ruleError{
+			msg:  fmt.Sprintf("the struct tag key %s is not read, as keys are case-sensitive", k.name),
+			hint: "write the key as validate",
+		}
+	case k.spaced:
+		return "", true, &ruleError{
+			msg:  "the validate tag has a space around its colon, so it is not read",
+			hint: `write it as validate:"…", without spaces`,
+		}
+	case !k.quoted && strings.Contains(k.value, `\`):
 		return "", true, errors.New(`the validate tag is not a valid quoted string; write a backslash as \\`)
+	case !k.quoted:
+		return "", true, errors.New("the validate tag is not a valid quoted string")
 	}
-	return "", true, errors.New("the validate tag is not a valid quoted string")
+	return "", true, &ruleError{
+		msg:  "the struct tag is malformed before the validate key, so it is not read",
+		hint: "go vet reports where the tag goes wrong",
+	}
+}
+
+// tagKeyAt is a key of a struct tag, read more leniently than reflect reads
+// one.
+type tagKeyAt struct {
+	name string
+
+	// spaced says there is a space before or after the colon.
+	spaced bool
+
+	// value is the quoted value, and quoted says it unquotes.
+	value  string
+	quoted bool
+}
+
+// validateKeys returns the keys of tag that spell validate in any case. It
+// reads tag as reflect does, but takes spaces around a colon, and goes on past
+// a value that does not unquote, so that it finds the keys reflect does not.
+func validateKeys(tag reflect.StructTag) []tagKeyAt {
+	var keys []tagKeyAt
+	s := string(tag)
+	for {
+		s = strings.TrimLeft(s, " ")
+		i := 0
+		for i < len(s) && s[i] > ' ' && s[i] != ':' && s[i] != '"' && s[i] != 0x7f {
+			i++
+		}
+		k := tagKeyAt{name: s[:i]}
+		rest := strings.TrimLeft(s[i:], " ")
+		k.spaced = len(rest) != len(s[i:])
+		rest, colon := strings.CutPrefix(rest, ":")
+		after := strings.TrimLeft(rest, " ")
+		k.spaced = k.spaced || len(after) != len(rest)
+		if i == 0 || !colon || !strings.HasPrefix(after, `"`) {
+			return keys
+		}
+
+		j := 1
+		for j < len(after) && after[j] != '"' {
+			if after[j] == '\\' {
+				j++
+			}
+			j++
+		}
+		k.value = after[:min(j+1, len(after))]
+		_, err := strconv.Unquote(k.value)
+		k.quoted = err == nil
+		if strings.EqualFold(k.name, tagKey) {
+			keys = append(keys, k)
+		}
+		if j >= len(after) {
+			return keys
+		}
+		s = after[j+1:]
+	}
 }
 
 // add adds item, one comma-separated part of a tag, to the last of levels.

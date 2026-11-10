@@ -11,6 +11,12 @@ Go applies the internal rule by import path, so these packages can be imported b
 `github.com/go-kanna/` and by nothing else. Nothing here is a public API: versions track whatever the generators need,
 and a minor release may break the one before it.
 
+A user's module, though, selects one version of internal for every generator it has as a tool, the highest any of them
+requires. A released generator is then built with an internal newer than the one it was released with, and what it
+generates can follow that version. A change that breaks what a released generator calls stops it from compiling in the
+user's module until the user upgrades it, so CI builds the latest release of every generator and of kanna with each
+change here.
+
 ## Packages
 
 - [`cli`](./cli): runs a generator as a command, with the flags, reporting, and exit codes every generator shares.

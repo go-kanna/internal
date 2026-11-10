@@ -235,7 +235,8 @@ func (x Request) Validate() error {
 		}
 	}
 
-	for k, v := range x.ByPoint {
+	for _, k := range validator.SortedKeys(x.ByPoint) {
+		v := x.ByPoint[k]
 		errs.Nest(validator.Key("by_point", k), v.Validate())
 	}
 

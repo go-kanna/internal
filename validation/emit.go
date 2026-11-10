@@ -241,18 +241,18 @@ func (m *method) pointer(v *Value, at place, depth int) {
 // elem loops over the elements of a slice or array, or the values of a map,
 // and writes v.elem for each.
 //
-// A map whose keys have an order is walked in it, so that its errors come out
-// in the same order on every run.
+// A map is walked in the order of its keys, or of their paths for keys
+// without an order, such as structs, so that its errors come out in the same
+// order on every run.
 func (m *method) elem(v *Value, at place, depth int) {
 	elem := at
 	if mt, ok := v.typ.Underlying().(*types.Map); ok {
 		k, val := m.loopVar("k", depth), m.loopVar("v", depth)
+		keys := m.rt + ".SortedKeys(" + at.expr + ")"
 		if isOrdered(mt.Key()) {
-			m.printf("for _, %s := range %s.Sorted(%s.Keys(%s)) {\n%s := %s[%s]\n",
-				k, m.f.Import("slices", "slices"), m.f.Import("maps", "maps"), at.expr, val, paren(at.expr), k)
-		} else {
-			m.printf("for %s, %s := range %s {\n", k, val, at.expr)
+			keys = m.f.Import("slices", "slices") + ".Sorted(" + m.f.Import("maps", "maps") + ".Keys(" + at.expr + "))"
 		}
+		m.printf("for _, %s := range %s {\n%s := %s[%s]\n", k, keys, val, paren(at.expr), k)
 		elem.expr, elem.recv = val, val
 		elem.path = fmt.Sprintf("%s.Key(%s, %s)", m.rt, at.path, k)
 	} else {

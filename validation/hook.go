@@ -64,6 +64,10 @@ func isErrorsPointer(t types.Type) bool {
 // and Key. Below a value whose Validate
 // kanna-validator does not write, nothing is checked, as what it reports is up
 // to that Validate.
+//
+// It also reports a string constant given as the path, which does not compile,
+// with the path to write instead, and a key given to Key that is not
+// comparable, on which Key panics.
 func HookPaths(fset *token.FileSet, pkgs []*packages.Package, s scan.Struct, hook *types.Func) []diag.Diag {
 	i := slices.IndexFunc(pkgs, func(p *packages.Package) bool { return p.PkgPath == s.PkgPath })
 	if i < 0 || pkgs[i].TypesInfo == nil {
@@ -117,6 +121,14 @@ func (c hookChecker) check(body *ast.BlockStmt) []diag.Diag {
 			return true
 		}
 		arg := call.Args[0]
+		if d, ok := c.stringPath(method, arg); ok {
+			diags = append(diags, d)
+			return true
+		}
+		if ds := c.uncomparableKeys(arg); len(ds) > 0 {
+			diags = append(diags, ds...)
+			return true
+		}
 		segs, ok := c.pathOf(arg)
 		if !ok {
 			return true
@@ -137,6 +149,63 @@ func (c hookChecker) check(body *ast.BlockStmt) []diag.Diag {
 			}
 			diags = append(diags, d)
 		}
+		return true
+	})
+	return diags
+}
+
+// stringPath reports arg, the path given to method, when it is a string
+// constant, which does not compile, with the path to write instead.
+func (c hookChecker) stringPath(method string, arg ast.Expr) (diag.Diag, bool) {
+	tv := c.info.Types[arg]
+	if tv.Value == nil || tv.Value.Kind() != constant.String {
+		return diag.Diag{}, false
+	}
+	name := constant.StringVal(tv.Value)
+	var hint string
+	switch {
+	case name == "" && method == "Add":
+		hint = c.wholeHint()
+	case name == "":
+		hint = "write validator.Path{}"
+	case name == base:
+		hint = "write validator.Base"
+	case strings.ContainsAny(name, "[]"):
+		hint = `write it with validator.Field and the methods of Path, as in validator.Field("items").Index(0).Field("sku")`
+	default:
+		quoted := strings.Split(name, ".")
+		for i, q := range quoted {
+			quoted[i] = fmt.Sprintf("%q", q)
+		}
+		hint = "write validator.Field(" + strings.Join(quoted, ", ") + ")"
+	}
+	return diag.Errorf(c.fset.Position(arg.Pos()), "%s is not a path of %s: %s takes a validator.Path, not a string",
+		types.ExprString(arg), c.target.Name, method).WithHints(hint), true
+}
+
+// uncomparableKeys reports each key given to Path.Key in e that is not
+// comparable, on which Key panics.
+func (c hookChecker) uncomparableKeys(e ast.Expr) []diag.Diag {
+	var diags []diag.Diag
+	ast.Inspect(e, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		sel, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "Key" || !c.isPathMethod(sel.Sel) {
+			return true
+		}
+		key := call.Args[0]
+		t := c.info.Types[key].Type
+		if t == nil || packages.Invalid(t) || types.Comparable(t) {
+			return true
+		}
+		if _, ok := types.Unalias(t).(*types.TypeParam); ok {
+			return true
+		}
+		diags = append(diags, diag.Errorf(c.fset.Position(key.Pos()),
+			"Path.Key panics on %s, as %s is not comparable", types.ExprString(key), types.TypeString(t, c.qualify)))
 		return true
 	})
 	return diags

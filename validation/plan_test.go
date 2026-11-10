@@ -194,6 +194,12 @@ func TestPlans_Errors(t *testing.T) {
 			want:  `the validate tag is not a valid quoted string; write a backslash as \\ (field Zip)`,
 		},
 		{
+			name:  "a key in upper case",
+			field: "Zip string `Validate:\"required\"`",
+			want: "test.go:5:2: error: the struct tag key Validate is not read, as keys are case-sensitive (field Zip)\n" +
+				"  write the key as validate",
+		},
+		{
 			name:  "a rule after pattern",
 			field: "Slug string `validate:\"pattern=^[a-z]+$,max=20\"`",
 			want: "test.go:5:2: warning: pattern= takes the rest of the tag as its regular expression, " +

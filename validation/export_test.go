@@ -69,7 +69,7 @@ func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]b
 			path, named := JSONName(field.Field)
 			nestPath := strconv.Quote(path)
 			if field.Embedded && !named && field.Tag.Get("json") != "-" {
-				nestPath = `""`
+				nestPath = ""
 			}
 			fmt.Fprint(f, "\n")
 			body.Value(field.Value, x+"."+field.Name, strconv.Quote(path), nestPath)

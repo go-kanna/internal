@@ -8,7 +8,6 @@ import (
 	"go/types"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -18,11 +17,9 @@ import (
 	"github.com/go-kanna/internal/suggest"
 )
 
-// base spells validator.Base, the path of an error on a value as a whole.
+// base is the name validator.Base gives the path of an error on a value as a
+// whole.
 const base = "base"
-
-// index matches the index of an element, as validator.Index spells it.
-var index = regexp.MustCompile(`^\[[0-9]+\]`)
 
 // Hook returns the validate method s declares for its generated checks to call
 // last, or nil, and says why one by that name cannot be called.
@@ -62,11 +59,10 @@ func isErrorsPointer(t types.Type) bool {
 // with what Config.TypesInfo records, among them that of s.
 //
 // It looks at the calls of Add and Nest on the Errors the hook is given, whose
-// path is a constant, or validator.Index or validator.Key of one. A path is
-// reported only when no way of reading it names something: a map key, which
-// validator.Key writes as it is, may hold a dot, and so may a JSON name.
-// Below a value whose Validate kanna-validator does not write, nothing is
-// checked, as what it reports is up to that Validate.
+// path is validator.Field of constants, validator.Base, validator.Path{}, or
+// validator.Index or validator.Key of one. Below a value whose Validate
+// kanna-validator does not write, nothing is checked, as what it reports is up
+// to that Validate.
 func HookPaths(fset *token.FileSet, pkgs []*packages.Package, s scan.Struct, hook *types.Func) []diag.Diag {
 	i := slices.IndexFunc(pkgs, func(p *packages.Package) bool { return p.PkgPath == s.PkgPath })
 	if i < 0 || pkgs[i].TypesInfo == nil {
@@ -120,20 +116,21 @@ func (c hookChecker) check(body *ast.BlockStmt) []diag.Diag {
 			return true
 		}
 		arg := call.Args[0]
-		path, steps, ok := c.pathOf(arg)
+		names, steps, ok := c.pathOf(arg)
 		if !ok {
 			return true
 		}
-		if path == "" && len(steps) == 0 {
+		if len(names) == 0 && len(steps) == 0 {
 			if method == "Add" {
 				diags = append(diags, diag.Errorf(c.fset.Position(arg.Pos()),
-					`"" is not a path of %s: Add needs a field`, c.target.Name).WithHints(c.wholeHint()))
+					"%s is not a path of %s: Add needs a field", types.ExprString(arg), c.target.Name).WithHints(c.wholeHint()))
 			}
 			return true
 		}
-		w := walk{c: c, path: path, steps: steps}
+		w := walk{c: c, names: names, steps: steps}
 		if !w.start() {
-			d := diag.Errorf(c.fset.Position(arg.Pos()), "%s is not a path of %s: %s", c.spell(arg, path), c.target.Name, w.why)
+			d := diag.Errorf(c.fset.Position(arg.Pos()), "%s is not a path of %s: %s",
+				c.spell(arg, names, steps), c.target.Name, w.why)
 			if w.hint != "" {
 				d = d.WithHints(w.hint)
 			}
@@ -176,23 +173,58 @@ const (
 	keyStep   step = "Key"
 )
 
-// pathOf returns the constant path e starts with, and the steps validator.Index
-// and validator.Key add to it, innermost first. It reports false for a path
-// that is not so made.
-func (c hookChecker) pathOf(e ast.Expr) (string, []step, bool) {
-	if tv, ok := c.info.Types[e]; ok && tv.Value != nil && tv.Value.Kind() == constant.String {
-		return constant.StringVal(tv.Value), nil, true
+// pathOf returns the names of the fields e starts with, and the steps
+// validator.Index and validator.Key add to them, innermost first. It reports
+// false for a path that is not so made.
+func (c hookChecker) pathOf(e ast.Expr) ([]string, []step, bool) {
+	e = ast.Unparen(e)
+	if c.isRuntime(e, "Base") {
+		return []string{base}, nil, true
 	}
-	call, ok := ast.Unparen(e).(*ast.CallExpr)
-	if !ok || len(call.Args) != 2 {
-		return "", nil, false
+	if lit, ok := e.(*ast.CompositeLit); ok && len(lit.Elts) == 0 && c.isRuntimeType(c.info.Types[e].Type, "Path") {
+		return nil, nil, true
 	}
-	s := step(c.runtimeFunc(call))
-	if s != indexStep && s != keyStep {
-		return "", nil, false
+	call, ok := e.(*ast.CallExpr)
+	if !ok {
+		return nil, nil, false
 	}
-	path, steps, ok := c.pathOf(call.Args[0])
-	return path, append(steps, s), ok
+	switch fn := c.runtimeFunc(call); {
+	case fn == "Field" && !call.Ellipsis.IsValid():
+		names := make([]string, len(call.Args))
+		for i, arg := range call.Args {
+			tv, ok := c.info.Types[arg]
+			if !ok || tv.Value == nil || tv.Value.Kind() != constant.String {
+				return nil, nil, false
+			}
+			names[i] = constant.StringVal(tv.Value)
+		}
+		return names, nil, true
+	case (fn == string(indexStep) || fn == string(keyStep)) && len(call.Args) == 2:
+		names, steps, ok := c.pathOf(call.Args[0])
+		return names, append(steps, step(fn)), ok
+	}
+	return nil, nil, false
+}
+
+// isRuntime reports whether e names the object called name of the runtime.
+func (c hookChecker) isRuntime(e ast.Expr, name string) bool {
+	var id *ast.Ident
+	switch e := e.(type) {
+	case *ast.SelectorExpr:
+		id = e.Sel
+	case *ast.Ident:
+		id = e
+	default:
+		return false
+	}
+	obj := c.info.Uses[id]
+	return obj != nil && obj.Name() == name && obj.Pkg() != nil && obj.Pkg().Path() == runtimePath
+}
+
+// isRuntimeType reports whether t is the type called name of the runtime.
+func (c hookChecker) isRuntimeType(t types.Type, name string) bool {
+	named, ok := types.Unalias(t).(*types.Named)
+	return ok && named.Obj().Name() == name && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == runtimePath
 }
 
 // runtimeFunc returns the name of the function of the runtime call calls, or
@@ -221,10 +253,11 @@ func (c hookChecker) runtimeFunc(call *ast.CallExpr) string {
 	return fn.Name()
 }
 
-// spell names the argument e, whose constant start is path, in a message.
-func (c hookChecker) spell(e ast.Expr, path string) string {
-	if tv, ok := c.info.Types[e]; ok && tv.Value != nil {
-		return fmt.Sprintf("%q", path)
+// spell names the argument e, a path through names and steps, in a message:
+// by the path it makes when it is made of fields alone, as errors name it.
+func (c hookChecker) spell(e ast.Expr, names []string, steps []step) string {
+	if len(steps) == 0 {
+		return fmt.Sprintf("%q", strings.Join(names, "."))
 	}
 	return types.ExprString(e)
 }
@@ -333,108 +366,105 @@ func (c hookChecker) members(t types.Type, seen []types.Type) ([]member, bool) {
 	return found, open
 }
 
-// walk tells whether a path can be read as one the errors of the target are
-// under, and of the ways it cannot, keeps the one that gets furthest.
+// walk tells whether a path can be one the errors of the target are under,
+// and if not, why.
 type walk struct {
 	c     hookChecker
-	path  string
+	names []string
 	steps []step
 
-	at   int    // where in the path the furthest failure is
-	why  string // what is wrong there
+	why  string // what is wrong
 	hint string
 }
 
 func (w *walk) start() bool {
-	if w.path == "" {
+	if len(w.names) == 0 {
 		return w.end(w.c.target.Named)
 	}
 	return w.fields(w.c.target.Named, 0)
 }
 
-// fail keeps a failure at at, unless one got further, and returns false.
-func (w *walk) fail(at int, hint, format string, args ...any) bool {
-	if w.why == "" || at > w.at {
-		w.at, w.why, w.hint = at, fmt.Sprintf(format, args...), hint
-	}
+// fail keeps why the path names nothing, and returns false.
+func (w *walk) fail(hint, format string, args ...any) bool {
+	w.why, w.hint = fmt.Sprintf(format, args...), hint
 	return false
 }
 
-// value reports whether what follows at can follow a value of type t.
-func (w *walk) value(t types.Type, at int) bool {
-	rest := w.path[at:]
-	if rest == "" {
-		return w.end(t)
-	}
-	reached := w.path[:at]
-	switch k, elem := w.c.kindOf(t); k {
-	case opaque:
-		return true
-	case dict:
-		// A key may hold a dot, so it may run to the end of the path.
-		if rest[0] == '.' {
-			return true
-		}
-		return w.fail(at, "", "%s is a map, whose keys follow a dot", reached)
-	case list:
-		if m := index.FindString(rest); m != "" {
-			return w.value(elem, at+len(m))
-		}
-		return w.fail(at, "", "%s is %s, whose elements go as %s[0]", reached, sliceOrArray(t), reached)
-	case record:
-		if rest[0] == '.' {
-			return w.fields(t, at+1)
-		}
-		return w.fail(at, "", "%s is a struct, whose fields follow a dot", reached)
-	case leaf:
-	}
-	return w.fail(at, "", "%s is %s, with nothing under it", reached, types.TypeString(t, w.c.qualify))
+// reached spells the first n names of the path.
+func (w *walk) reached(n int) string {
+	return strings.Join(w.names[:n], ".")
 }
 
-// fields reports whether the path from at can go on with a field of the
-// struct t.
+// value reports whether the names from at, and then the steps, can follow a
+// value of type t.
+func (w *walk) value(t types.Type, at int) bool {
+	if at == len(w.names) {
+		return w.end(t)
+	}
+	reached := w.reached(at)
+	switch k, _ := w.c.kindOf(t); k {
+	case opaque:
+		return true
+	case record:
+		return w.fields(t, at)
+	case dict:
+		return w.fail("", "%s is a map, whose values go under validator.Key", reached)
+	case list:
+		return w.fail("", "%s is %s, whose elements go under validator.Index", reached, sliceOrArray(t))
+	case leaf:
+	}
+	return w.fail("", "%s is %s, with nothing under it", reached, types.TypeString(t, w.c.qualify))
+}
+
+// fields reports whether the names from at, and then the steps, can go on
+// with a field of the struct t.
 func (w *walk) fields(t types.Type, at int) bool {
-	rest := w.path[at:]
+	name := w.names[at]
 	members, open := w.c.members(t, nil)
 	for _, m := range members {
-		if after, ok := strings.CutPrefix(rest, m.name); ok && endsName(after) && w.value(m.typ, at+len(m.name)) {
-			return true
+		if m.name == name {
+			return w.value(m.typ, at+1)
 		}
 	}
-	if after, ok := strings.CutPrefix(rest, base); ok && endsName(after) {
-		if after == "" && len(w.steps) == 0 {
+	if name == base {
+		if at+1 == len(w.names) && len(w.steps) == 0 {
 			return true
 		}
 		if !open {
-			return w.fail(at+len(base), "", "%s is the value as a whole, with nothing under it", w.path[:at+len(base)])
+			return w.fail("", "%s is the value as a whole, with nothing under it", w.reached(at+1))
 		}
 	}
 	if open {
 		return true
 	}
 
-	name := rest[:strings.IndexAny(rest+".", ".[")]
 	names := make([]string, len(members))
 	for i, m := range members {
 		names[i] = m.name
 	}
 	hint := ""
 	if s, ok := suggest.Closest(name, names); ok {
-		hint = fmt.Sprintf("did you mean %q?", w.path[:at]+s)
+		hint = fmt.Sprintf("did you mean %q?", strings.Join(append(slices.Clone(w.names[:at]), s), "."))
+	} else if strings.Contains(name, ".") {
+		quoted := strings.Split(name, ".")
+		for i, q := range quoted {
+			quoted[i] = fmt.Sprintf("%q", q)
+		}
+		hint = "a name is one field: give each to validator.Field, as in validator.Field(" + strings.Join(quoted, ", ") + ")"
 	} else if at == 0 {
 		hint = w.c.wholeHint()
 	}
 	owner := w.c.target.Name
 	if at > 0 {
-		owner = w.path[:at-1]
+		owner = w.reached(at)
 	}
-	return w.fail(at, hint, "%s has no field %q", owner, name)
+	return w.fail(hint, "%s has no field %q", owner, name)
 }
 
 // end reports whether the steps of the path can be taken from a value of type
-// t, which the constant start of the path reaches.
+// t, which its names reach.
 func (w *walk) end(t types.Type) bool {
-	for i, s := range w.steps {
+	for _, s := range w.steps {
 		k, elem := w.c.kindOf(t)
 		switch {
 		case k == opaque:
@@ -443,19 +473,12 @@ func (w *walk) end(t types.Type) bool {
 			t = elem
 			continue
 		}
-		at := len(w.path) + 1 + i // past where any reading of the constant fails
 		if s == indexStep {
-			return w.fail(at, "", "validator.Index needs a slice or an array, not %s", types.TypeString(t, w.c.qualify))
+			return w.fail("", "validator.Index needs a slice or an array, not %s", types.TypeString(t, w.c.qualify))
 		}
-		return w.fail(at, "", "validator.Key needs a map, not %s", types.TypeString(t, w.c.qualify))
+		return w.fail("", "validator.Key needs a map, not %s", types.TypeString(t, w.c.qualify))
 	}
 	return true
-}
-
-// endsName reports whether after, what follows a name in a path, lets the name
-// end there.
-func endsName(after string) bool {
-	return after == "" || after[0] == '.' || after[0] == '['
 }
 
 func sliceOrArray(t types.Type) string {

@@ -13,6 +13,7 @@ import (
 	"go/ast"
 	"go/types"
 	"maps"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -71,7 +72,10 @@ func (s Scope) Lookup(name string) (*types.Package, error) {
 			Msg:  "the file imports no package named " + name,
 			Hint: "import it, as _ if nothing else uses it",
 		}
-		if c, ok := suggest.Closest(name, slices.Sorted(maps.Keys(s.byName))); ok {
+		names := slices.Sorted(maps.Keys(s.byName))
+		if n, p, ok := s.byPathEnd(name, names); ok {
+			e.Hint = fmt.Sprintf("the file imports %s, which it calls %s; write %s", p.Path(), n, n)
+		} else if c, ok := suggest.Closest(name, names); ok {
 			e.Hint = fmt.Sprintf("did you mean %s?", c)
 		}
 		return nil, e
@@ -85,4 +89,25 @@ func (s Scope) Lookup(name string) (*types.Package, error) {
 			Hint: "a package imported as _ goes by its own name, which these share",
 		}
 	}
+}
+
+// byPathEnd returns the one package the file imports whose path ends in name,
+// and the name the file calls it, for a package named other than its path. A
+// name the file calls more than one package would be no way out.
+func (s Scope) byPathEnd(name string, names []string) (string, *types.Package, bool) {
+	var (
+		found string
+		pkg   *types.Package
+	)
+	for _, n := range names {
+		ps := s.byName[n]
+		if len(ps) != 1 || path.Base(ps[0].Path()) != name {
+			continue
+		}
+		if pkg != nil {
+			return "", nil, false
+		}
+		found, pkg = n, ps[0]
+	}
+	return found, pkg, pkg != nil
 }

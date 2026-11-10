@@ -90,10 +90,10 @@ func Find(fset *token.FileSet, doc *ast.CommentGroup, key string) (Directive, []
 	return found, ds
 }
 
-// parse splits a comment body such as "kanna:container name=A" into its key and
-// arguments, reporting whether the body is in the kanna namespace at all. The
-// key runs up to the first space, so kanna:validateXYZ is a key of its own
-// rather than validate with something stuck to it.
+// parse splits a comment body such as "kanna:conflict tenant_id,email" into its
+// key and arguments, reporting whether the body is in the kanna namespace at
+// all. The key runs up to the first space, so kanna:validateXYZ is a key of its
+// own rather than validate with something stuck to it.
 func parse(body string) (key, args string, ok bool) {
 	rest, ok := strings.CutPrefix(strings.TrimSpace(body), namespace)
 	if !ok {

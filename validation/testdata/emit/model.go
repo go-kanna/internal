@@ -88,7 +88,7 @@ type Request struct {
 	Nickname *string          `json:"nickname"  validate:"min=2"`
 	Tags     []string         `json:"tags"      validate:"max=5,dive,required,max=20"`
 	Matrix   [][]int          `json:"matrix"    validate:"dive,dive,gte=0"`
-	Labels   map[string]Role  `json:"labels"    validate:"dive,max=10"`
+	Labels   map[string]Role  `json:"labels"    validate:"len=3,dive,max=10"`
 	Zip      string           `json:"zip"       validate:"omitempty,pattern=^\\d{3}-\\d{4}$"`
 	PostCode string           `json:"post_code" validate:"omitempty,pattern=^\\d{3}-\\d{4}$"`
 	Code     Role             `json:"code"      validate:"pattern=^[A-Z]+$"`

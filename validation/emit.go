@@ -32,6 +32,7 @@ var (
 		token.GTR: "GreaterThan", token.GEQ: "GreaterThanOrEqualTo",
 	}
 	lengthErrors = map[token.Token]string{token.GEQ: "TooShort", token.LEQ: "TooLong", token.EQL: "WrongLength"}
+	countErrors  = map[token.Token]string{token.GEQ: "TooFew", token.LEQ: "TooMany", token.EQL: "WrongCount"}
 )
 
 // Planned is a struct and the plans of its fields with something to check.
@@ -93,10 +94,16 @@ type Body struct {
 }
 
 // Value writes the checks of v, the value of the Go expression expr. What it
-// breaks goes under path, and what its own Validate reports under nestPath,
-// both Go expressions of a path: "" keeps them at the level of the struct, as
-// encoding/json flattens an embedded struct without a JSON name.
-func (b Body) Value(v *Value, expr, path, nestPath string) {
+// breaks goes under the field named name, and what its own Validate reports
+// under the field named nestName, both Go expressions of a string: an empty
+// nestName keeps them at the level of the struct, as encoding/json flattens an
+// embedded struct without a JSON name.
+func (b Body) Value(v *Value, expr, name, nestName string) {
+	path := b.m.rt + ".Field(" + name + ")"
+	nestPath := b.m.rt + ".Path{}"
+	if nestName != "" {
+		nestPath = b.m.rt + ".Field(" + nestName + ")"
+	}
 	b.m.value(v, place{expr: expr, recv: expr, path: path, nestPath: nestPath}, 0)
 }
 
@@ -170,7 +177,7 @@ type place struct {
 	path string
 
 	// nestPath is the path the value's own Validate nests its errors under,
-	// which is "" for an embedded struct that encoding/json flattens.
+	// which is empty for an embedded struct that encoding/json flattens.
 	nestPath string
 }
 
@@ -290,8 +297,12 @@ func (m *method) check(c check, t types.Type, at place) {
 		if c.runes {
 			n = m.f.Import("unicode/utf8", "utf8") + ".RuneCountInString(" + asString(at.expr, t) + ")"
 		}
+		errs := countErrors
+		if c.runes {
+			errs = lengthErrors
+		}
 		m.printf("if %s %s %d {\n%s\n}\n", n, breaking[c.op], c.bound,
-			m.add(at.path, fmt.Sprintf("%s(%d)", lengthErrors[c.op], c.bound)))
+			m.add(at.path, fmt.Sprintf("%s(%d)", errs[c.op], c.bound)))
 	case compareCheck:
 		bound := m.bound(c.bound, c.duration)
 		cond := at.expr + " " + breaking[c.op].String() + " " + bound

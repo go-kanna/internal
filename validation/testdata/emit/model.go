@@ -66,6 +66,8 @@ type Request struct {
 	Quantity uint16           `json:"quantity"  validate:"lte=1000"`
 	Score    float64          `json:"score"     validate:"gt=0"`
 	Ratio    float32          `json:"ratio"     validate:"gte=0,lte=1"`
+	Weight   float64          `json:"weight"    validate:"ne=0"`
+	Factor   float32          `json:"factor"    validate:"ne=1"`
 	Role     Role             `json:"role"      validate:"required,oneof=admin member"`
 	Nickname *string          `json:"nickname"  validate:"min=2"`
 	Tags     []string         `json:"tags"      validate:"max=5,dive,required,max=20"`

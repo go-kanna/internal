@@ -4,6 +4,7 @@ package emit
 
 import (
 	"maps"
+	"math"
 	"regexp"
 	"slices"
 	"time"
@@ -72,6 +73,14 @@ func (x Request) Validate() error {
 	}
 	if !(x.Ratio <= 1) {
 		errs.Add("ratio", validator.LessThanOrEqualTo[float32](1))
+	}
+
+	if x.Weight == 0 || math.IsNaN(x.Weight) {
+		errs.Add("weight", validator.OtherThan[float64](0))
+	}
+
+	if x.Factor == 1 || math.IsNaN(float64(x.Factor)) {
+		errs.Add("factor", validator.OtherThan[float32](1))
 	}
 
 	if x.Role == "" {

@@ -279,7 +279,12 @@ func (m *method) check(c check, t types.Type, at place) {
 	case compareCheck:
 		bound := m.bound(c.bound, c.duration)
 		cond := at.expr + " " + breaking[c.op].String() + " " + bound
-		if isFloat(t) {
+		switch {
+		case isFloat(t) && c.op == token.NEQ:
+			// NaN differs from every number, so it meets ne unless tested
+			// for.
+			cond += " || " + m.f.Import("math", "math") + ".IsNaN(" + asFloat64(at.expr, t) + ")"
+		case isFloat(t):
 			// NaN compares false with everything, so it meets neither a
 			// requirement nor its opposite: the requirement itself is negated.
 			cond = "!(" + at.expr + " " + c.op.String() + " " + bound + ")"
@@ -444,6 +449,15 @@ func asString(expr string, t types.Type) string {
 		return expr
 	}
 	return "string(" + expr + ")"
+}
+
+// asFloat64 converts expr, a floating-point number of type t, to the float64
+// math takes.
+func asFloat64(expr string, t types.Type) string {
+	if types.Identical(types.Unalias(t), types.Typ[types.Float64]) {
+		return expr
+	}
+	return "float64(" + expr + ")"
 }
 
 // isOrdered reports whether values of t can be sorted with <.

@@ -286,6 +286,24 @@ func TestPlans_Errors(t *testing.T) {
 			want:  "eqfield applies to the field itself, not to the elements after dive (field Tags)",
 		},
 		{
+			name:  "eqfield naming the field itself",
+			field: "Password string `validate:\"eqfield=Password\"`\n\tPasswd string",
+			want:  "eqfield=Password names the field itself, which always equals itself (field Password)",
+		},
+		{
+			// Base closes with the brace that ends Target in the others.
+			name:  "eqfield naming a promoted field",
+			field: "Confirm string `validate:\"eqfield=ID\"`\n\tBase\n}\n\ntype Base struct {\n\tID string",
+			want: "eqfield=ID names a field promoted from Base; eqfield names a field the struct declares (field Confirm)\n" +
+				"  compare them in the struct's validate(errs *validator.Errors)",
+		},
+		{
+			name:  "dash",
+			field: "Name string `validate:\"-\"`",
+			want: "\"-\" is no rule (field Name)\n  remove the validate tag: a field without one is not checked, " +
+				"but for a type with Validate, which is always called",
+		},
+		{
 			name:  "rule after dive",
 			field: "Tags []string `validate:\"dive,rule=Tag\"`",
 			want:  "rule=Tag: no such type (field Tags)",

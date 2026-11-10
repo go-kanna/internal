@@ -104,6 +104,11 @@ type site struct {
 	// fields are the struct's other fields, for eqfield. They are nil below
 	// the field's own level, where eqfield has no field to compare with.
 	fields []sibling
+
+	// self is the name of the field, and owner the struct, which eqfield
+	// explains a name it does not find by.
+	self  string
+	owner types.Type
 }
 
 // sibling is another field of the struct, which eqfield can name.
@@ -169,6 +174,13 @@ func resolve(r rule, t types.Type, at site) (check, error) {
 		return res(r, t, at)
 	}
 
+	if r.name == "-" {
+		return nil, &ruleError{
+			msg: `"-" is no rule`,
+			hint: "remove the validate tag: a field without one is not checked, " +
+				"but for a type with Validate, which is always called",
+		}
+	}
 	err := ruleErrorf("unknown rule %q", r.name)
 	names := append(slices.Collect(maps.Keys(resolvers)), "required", "omitempty", "dive")
 	slices.Sort(names)
@@ -352,6 +364,16 @@ func eqField(r rule, t types.Type, at site) (check, error) {
 	}
 
 	i := slices.IndexFunc(at.fields, func(f sibling) bool { return f.name == r.param })
+	if i < 0 && r.param == at.self {
+		return nil, ruleErrorf("eqfield=%s names the field itself, which always equals itself", r.param)
+	}
+	if via, ok := at.promotedFrom(r.param); i < 0 && ok {
+		return nil, &ruleError{
+			msg: fmt.Sprintf("eqfield=%s names a field promoted from %s; eqfield names a field the struct declares",
+				r.param, via),
+			hint: "compare them in the struct's validate(errs *validator.Errors)",
+		}
+	}
 	if i < 0 {
 		err := ruleErrorf("eqfield=%s: no such field", r.param)
 		names := make([]string, len(at.fields))
@@ -725,6 +747,23 @@ func typeNames(scope *types.Scope) []string {
 		}
 	}
 	return names
+}
+
+// promotedFrom returns the name of the embedded field that name, a field of
+// the struct, is promoted from.
+func (at site) promotedFrom(name string) (string, bool) {
+	if at.owner == nil {
+		return "", false
+	}
+	obj, index, _ := types.LookupFieldOrMethod(at.owner, false, at.pkg, name)
+	if _, ok := obj.(*types.Var); !ok || len(index) < 2 {
+		return "", false
+	}
+	s, ok := at.owner.Underlying().(*types.Struct)
+	if !ok {
+		return "", false
+	}
+	return s.Field(index[0]).Name(), true
 }
 
 // typeString spells t as the source declaring the struct would.

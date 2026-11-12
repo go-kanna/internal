@@ -2,6 +2,7 @@ package directive_test
 
 import (
 	"go/ast"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
@@ -153,8 +154,8 @@ func g() {}
 	lines := directive.Lines(fset, []*ast.File{f})
 
 	if got, want := strs(directive.Misplaced(lines, pkg, directive.StructType, "container")), []string{
-		"p.go:6:1: error: //kanna:container marks a struct type, not a type other than a struct or an interface, " +
-			"so nothing reads it\n  write it right above a struct type",
+		"p.go:6:1: error: //kanna:container marks a struct type, not an int type, so nothing reads it\n" +
+			"  write it right above a struct type",
 		"p.go:9:1: error: //kanna:container marks a struct type, not a function, so nothing reads it\n" +
 			"  write it right above a struct type",
 	}; !slices.Equal(got, want) {
@@ -167,5 +168,55 @@ func g() {}
 			"so nothing reads it\n  write it right above a struct type or an interface type",
 	}; !slices.Equal(got, want) {
 		t.Errorf("Misplaced() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestMisplaced_OtherType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		decl     string
+		want     string
+		withoutT string
+	}{
+		{"type T string", "a string type", "a type other than a struct or an interface"},
+		{"type T uint8", "a uint8 type", "a type other than a struct or an interface"},
+		{"type T Base", "an int64 type", "a type other than a struct or an interface"},
+		{"type T unsafe.Pointer", "an unsafe.Pointer type", "a type other than a struct or an interface"},
+		{"type T Undeclared", "a type other than a struct or an interface", "a type other than a struct or an interface"},
+		{"type T []int", "a slice type", "a slice type"},
+		{"type T [2]int", "an array type", "an array type"},
+		{"type T map[string]int", "a map type", "a map type"},
+		{"type T *int", "a pointer type", "a pointer type"},
+		{"type T (func())", "a function type", "a function type"},
+		{"type T chan int", "a channel type", "a channel type"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.decl, func(t *testing.T) {
+			t.Parallel()
+
+			src := "package p\n\nimport \"unsafe\"\n\nvar _ unsafe.Pointer\n\ntype Base int64\n\n//kanna:container\n" +
+				tt.decl + "\n"
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "p.go", src, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Undeclared fails to check, and the package keeps what it knows.
+			conf := types.Config{Importer: importer.Default(), Error: func(error) {}}
+			pkg, _ := conf.Check("p", fset, []*ast.File{f}, nil)
+			lines := directive.Lines(fset, []*ast.File{f})
+
+			for _, c := range []struct {
+				pkg  *types.Package
+				want string
+			}{{pkg, tt.want}, {nil, tt.withoutT}} {
+				want := []string{"p.go:9:1: error: //kanna:container marks a struct type, not " + c.want +
+					", so nothing reads it\n  write it right above a struct type"}
+				if got := strs(directive.Misplaced(lines, c.pkg, directive.StructType, "container")); !slices.Equal(got, want) {
+					t.Errorf("Misplaced(pkg=%v) =\n%q\nwant\n%q", c.pkg != nil, got, want)
+				}
+			}
+		})
 	}
 }

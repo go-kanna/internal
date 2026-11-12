@@ -257,7 +257,7 @@ func (p Planner) value(t types.Type, levels []level, at site, enclosing []types.
 		v.checks = append(v.checks, c)
 		resolved = append(resolved, r)
 	}
-	errs = append(errs, conflicts(resolved, v.checks)...)
+	errs = append(errs, conflicts(resolved, v.checks, t)...)
 
 	path, nest := p.findValidate(t)
 	v.nest = nest

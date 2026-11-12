@@ -151,6 +151,27 @@ func TestPlans(t *testing.T) {
 	}
 }
 
+// Open bounds a step apart leave no integer between them, but leave floats.
+func TestPlans_OpenBounds(t *testing.T) {
+	t.Parallel()
+
+	src := "package test\n\n//kanna:validate\ntype Target struct {\n" +
+		"\tRatio float64 `validate:\"gt=0,lt=1\"`\n" +
+		"\tPct int `validate:\"gt=0,lt=2\"`\n" +
+		"\tTimeout time.Duration `validate:\"gt=0s,lt=2ns\"`\n}\n"
+	src = strings.Replace(src, "\n\n", "\n\nimport \"time\"\n\n", 1)
+	if _, diags := plans(t, map[string]string{"test.go": src}); len(diags) > 0 {
+		t.Errorf("diagnostics: %q", diags)
+	}
+
+	src = strings.Replace(src, "lt=2ns", "lt=1ns", 1)
+	_, diags := plans(t, map[string]string{"test.go": src})
+	want := "no value passes gt=0s and lt=1ns together (field Timeout)"
+	if !slices.ContainsFunc(diags, func(d string) bool { return strings.Contains(d, want) }) {
+		t.Errorf("diagnostics = %q, want one containing %q", diags, want)
+	}
+}
+
 // A blank field cannot be read, so one of a type that validates itself is left
 // alone rather than checked through x._.
 func TestPlans_BlankField(t *testing.T) {
@@ -221,6 +242,17 @@ func TestPlans_Errors(t *testing.T) {
 			name:  "an open bound meeting the other",
 			field: "Ratio float64 `validate:\"gt=1,lte=1\"`",
 			want:  "no value passes gt=1 and lte=1 together (field Ratio)",
+		},
+		{
+			name:  "open bounds with no integer between",
+			field: "Pct int `validate:\"gt=0,lt=1\"`",
+			want:  "no value passes gt=0 and lt=1 together (field Pct)",
+		},
+		{
+			// Level closes with the brace that ends Target in the others.
+			name:  "open bounds with no value of a named integer type between",
+			field: "Level Level `validate:\"gt=2,lt=3\"`\n}\n\ntype Level int8\n\nvar _ struct {\n\tX int",
+			want:  "no value passes gt=2 and lt=3 together (field Level)",
 		},
 		{
 			name:  "eq outside the bounds",

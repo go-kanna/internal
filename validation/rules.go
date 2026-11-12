@@ -581,8 +581,9 @@ var boundRules = []string{"min", "max", "len", "eq", "gt", "gte", "lt", "lte"}
 // conflicts says why no value passes checks, which rules resolve to at one
 // level, however it is written: a bound given twice, or two bounds that leave
 // no value between them. A range of numbers or lengths is empty only where two
-// of its bounds are, so they are compared two by two.
-func conflicts(rules []rule, checks []check) []error {
+// of its bounds are, so they are compared two by two. t is the type checked,
+// whose integers leave no value between gt=0 and lt=1.
+func conflicts(rules []rule, checks []check, t types.Type) []error {
 	first := make(map[string]rule)
 	for _, r := range rules {
 		if !slices.Contains(boundRules, r.name) {
@@ -599,6 +600,9 @@ func conflicts(rules []rule, checks []check) []error {
 		switch c := c.(type) {
 		case compareCheck:
 			edges[i] = edge{op: c.op, v: numberOf(c.bound)}
+			if isInteger(t) {
+				edges[i] = edges[i].closed()
+			}
 		case lengthCheck:
 			edges[i] = edge{op: c.op, v: constant.MakeInt64(int64(c.bound))}
 		}
@@ -642,6 +646,22 @@ func disjoint(a, b edge) bool {
 		return constant.Compare(lower.v, token.GEQ, upper.v)
 	}
 	return constant.Compare(lower.v, token.GTR, upper.v)
+}
+
+// closed returns e, a bound on integers, with an open bound made the closed
+// one that keeps the same integers: gt=0 is gte=1, and lt=1 is lte=0.
+func (e edge) closed() edge {
+	if e.v.Kind() == constant.Unknown {
+		return e
+	}
+	one := constant.MakeInt64(1)
+	if e.op == token.GTR {
+		return edge{op: token.GEQ, v: constant.BinaryOp(constant.ToInt(e.v), token.ADD, one)}
+	}
+	if e.op == token.LSS {
+		return edge{op: token.LEQ, v: constant.BinaryOp(constant.ToInt(e.v), token.SUB, one)}
+	}
+	return e
 }
 
 func (e edge) isLower() bool { return e.op == token.GEQ || e.op == token.GTR }

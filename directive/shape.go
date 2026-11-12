@@ -113,10 +113,80 @@ func Misplaced(lines []Line, pkg *types.Package, accept Shape, keys ...string) [
 		}
 		if s := l.Shape(pkg); s&accept == 0 {
 			diags = append(diags, diag.Errorf(l.Pos, "%s marks %s, not %s, so nothing reads it", spelled(l.Key, ""),
-				accept, s).WithHints("write it right above "+accept.String()))
+				accept, l.describe(pkg, s)).WithHints("write it right above "+accept.String()))
 		}
 	}
 	return diags
+}
+
+// describe names s, the shape of what l is the doc of, telling an OtherType by
+// its underlying type, as a string type, or by its syntax when pkg does not
+// know the type.
+func (l Line) describe(pkg *types.Package, s Shape) string {
+	if s != OtherType || l.typ == nil {
+		return s.String()
+	}
+	if pkg != nil {
+		if obj, ok := pkg.Scope().Lookup(l.typ.Name.Name).(*types.TypeName); ok && obj.Pos() == l.typ.Name.Pos() {
+			if d := describeType(obj.Type().Underlying()); d != "" {
+				return d
+			}
+		}
+	}
+	if d := describeExpr(l.typ.Type); d != "" {
+		return d
+	}
+	return s.String()
+}
+
+func describeType(t types.Type) string {
+	switch t := t.(type) {
+	case *types.Basic:
+		if t.Kind() == types.Invalid {
+			return ""
+		}
+		if t.Kind() == types.UnsafePointer {
+			return "an unsafe.Pointer type"
+		}
+		if strings.ContainsRune("aeio", rune(t.Name()[0])) {
+			return "an " + t.Name() + " type"
+		}
+		return "a " + t.Name() + " type"
+	case *types.Slice:
+		return "a slice type"
+	case *types.Array:
+		return "an array type"
+	case *types.Map:
+		return "a map type"
+	case *types.Pointer:
+		return "a pointer type"
+	case *types.Signature:
+		return "a function type"
+	case *types.Chan:
+		return "a channel type"
+	}
+	return ""
+}
+
+func describeExpr(e ast.Expr) string {
+	switch e := e.(type) {
+	case *ast.ParenExpr:
+		return describeExpr(e.X)
+	case *ast.ArrayType:
+		if e.Len == nil {
+			return "a slice type"
+		}
+		return "an array type"
+	case *ast.MapType:
+		return "a map type"
+	case *ast.StarExpr:
+		return "a pointer type"
+	case *ast.FuncType:
+		return "a function type"
+	case *ast.ChanType:
+		return "a channel type"
+	}
+	return ""
 }
 
 // docsOf returns the doc comments of what f declares, down to the fields of

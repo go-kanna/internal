@@ -4,11 +4,13 @@
 package packages
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -100,8 +102,9 @@ const mode = packages.NeedName |
 
 // Load loads the packages matching patterns, which the go command matches as it
 // always does; no patterns means the package in Dir. The error reports that the
-// go command could not be run at all. Anything wrong with the packages
-// themselves is in Set.Diags.
+// go command could not be run at all, or failed before listing any package, as
+// outside every module. Anything wrong with the packages themselves is in
+// Set.Diags.
 //
 // A change to a declaration can leave the output an earlier run generated from
 // it referring to what is gone, and a package that does not type-check cannot be
@@ -165,9 +168,35 @@ func load(patterns []string, cfg Config, overlay map[string][]byte) (Set, error)
 	if err != nil {
 		return Set{}, fmt.Errorf("load packages: %w", err)
 	}
+	if len(pkgs) == 0 {
+		if err := goList(dir, pc.BuildFlags, patterns); err != nil {
+			return Set{}, fmt.Errorf("load packages: %w", err)
+		}
+	}
 	pkgs = onePerPath(pkgs)
 
 	return Set{Packages: pkgs, Fset: fset, Diags: diagnose(pkgs, dir)}, nil
+}
+
+// goList runs go list on patterns and reports its failure.
+//
+// go/packages drops what the go command said when it failed listing packages
+// whose export data it was to build, as it does outside every module, and comes
+// back with none. Patterns that match no package come back with none too, and
+// there the go command only warns, so it is asked again to tell the two apart.
+func goList(dir string, buildFlags, patterns []string) error {
+	args := slices.Concat([]string{"list", "-e"}, buildFlags, []string{"--"}, patterns)
+	cmd := exec.CommandContext(context.Background(), "go", args...) //nolint:gosec // go, as go/packages runs it
+	cmd.Dir = dir
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("go list: %s", msg)
+		}
+		return fmt.Errorf("go list: %w", err)
+	}
+	return nil
 }
 
 // onePerPath keeps a single package per import path.

@@ -144,6 +144,36 @@ func TestLoad_ErrorWhenTheGoCommandCannotRun(t *testing.T) {
 	}
 }
 
+func TestLoad_ErrorOutsideAnyModule(t *testing.T) {
+	t.Parallel()
+
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "p.go"), []byte("package p\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, cfg := range []packages.Config{{Dir: dir}, {Dir: dir, Deps: true}} {
+		_, err := packages.Load(nil, cfg)
+		if err == nil || !strings.Contains(err.Error(), "go.mod file not found") {
+			t.Errorf("Load(Deps: %t) outside any module: error = %v, want the go command's", cfg.Deps, err)
+		}
+	}
+}
+
+func TestLoad_NoErrorWhenNothingMatches(t *testing.T) {
+	t.Parallel()
+
+	dir := module(t, nil)
+
+	set := load(t, []string{"./..."}, packages.Config{Dir: dir})
+	if len(set.Packages) > 0 || len(set.Diags) > 0 {
+		t.Errorf("Load(./...) in an empty module = %v, %v, want nothing", set.Packages, set.Diags)
+	}
+}
+
 func TestLoad_Tags(t *testing.T) {
 	t.Parallel()
 

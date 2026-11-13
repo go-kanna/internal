@@ -16,6 +16,9 @@ import (
 // runtimePath is the package generated checks record what breaks with.
 const runtimePath = "github.com/go-kanna/validator"
 
+// implPath is the package of what only generated checks call.
+const implPath = runtimePath + "/impl"
+
 // formatRulesPath is the package holding the rules email, url, and uuid run.
 const formatRulesPath = "github.com/go-kanna/value/rule"
 
@@ -277,7 +280,7 @@ func (m *method) elem(v *Value, at place, depth int) {
 	elem := at
 	if mt, ok := v.typ.Underlying().(*types.Map); ok {
 		k, val := m.loopVar("k", depth), m.loopVar("v", depth)
-		keys := m.rt + ".SortedKeys(" + at.expr + ")"
+		keys := m.f.Import(implPath, "impl") + ".SortedKeys(" + at.expr + ")"
 		if isOrdered(mt.Key()) {
 			keys = m.f.Import("slices", "slices") + ".Sorted(" + m.f.Import("maps", "maps") + ".Keys(" + at.expr + "))"
 		}

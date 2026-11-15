@@ -275,16 +275,17 @@ func (m *method) pointer(v *Value, at place, depth int) {
 //
 // A map is walked in the order of its keys, or of their paths for keys
 // without an order, such as structs, so that its errors come out in the same
-// order on every run.
+// order on every run. Each value comes with its key rather than being looked
+// up by it, which a NaN key would miss.
 func (m *method) elem(v *Value, at place, depth int) {
 	elem := at
 	if mt, ok := v.typ.Underlying().(*types.Map); ok {
 		k, val := m.loopVar("k", depth), m.loopVar("v", depth)
-		keys := m.f.Import(implPath, "impl") + ".SortedKeys(" + at.expr + ")"
+		sorted := "SortedByName"
 		if isOrdered(mt.Key()) {
-			keys = m.f.Import("slices", "slices") + ".Sorted(" + m.f.Import("maps", "maps") + ".Keys(" + at.expr + "))"
+			sorted = "SortedByKey"
 		}
-		m.printf("for _, %s := range %s {\n%s := %s[%s]\n", k, keys, val, paren(at.expr), k)
+		m.printf("for %s, %s := range %s.%s(%s) {\n", k, val, m.f.Import(implPath, "impl"), sorted, at.expr)
 		elem.expr, elem.recv = val, val
 		elem.path = fmt.Sprintf("%s.Key(%s)", at.path, k)
 	} else {

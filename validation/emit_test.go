@@ -85,6 +85,43 @@ type Target struct {
 	}
 }
 
+// A map walks its entries with its keys, whether they have an order or not,
+// and imports only what the walk calls.
+func TestEmit_MapEntries(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		key  string
+		want string
+	}{
+		{key: "string", want: "for k, v := range impl.SortedByKey(x.Values) {"},
+		{key: "struct{ ID int }", want: "for k, v := range impl.SortedByName(x.Values) {"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			t.Parallel()
+
+			pkg := pkgtest.Load(t, map[string]string{"test.go": "package test\n\n//kanna:validate\ntype Target struct {\n" +
+				"\tValues map[" + tt.key + "]string `validate:\"dive,required\"`\n}\n"})
+			got, err := validation.Emit(pkg.Fset, []*packages.Package{pkg}, nil)
+			if err != nil {
+				t.Fatalf("emit: %v\n%s", err, got)
+			}
+
+			for _, want := range []string{tt.want, "\t\"github.com/go-kanna/validator/impl\"\n"} {
+				if !strings.Contains(string(got), want) {
+					t.Errorf("output does not contain %q:\n%s", want, got)
+				}
+			}
+			for _, unwanted := range []string{`"maps"`, `"slices"`, "x.Values[k]"} {
+				if strings.Contains(string(got), unwanted) {
+					t.Errorf("output contains %s:\n%s", unwanted, got)
+				}
+			}
+		})
+	}
+}
+
 // TestEmit_ValueAt checks that Body.ValueAt writes the checks of Body.Value
 // under the paths it is given, of more than one segment.
 func TestEmit_ValueAt(t *testing.T) {

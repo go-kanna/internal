@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
 
@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: ${{ matrix.go-version-file }}
           go-version: ${{ matrix.go-version }}
@@ -86,7 +86,7 @@ jobs:
 
       # The workspace's Go, which an example may ask a newer one of than the
       # generator's module does. kanna has no workspace, so its module's Go.
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: generator/${{ hashFiles('generator/go.work') != '' && 'go.work' || 'go.mod' }}
 
@@ -111,7 +111,7 @@ jobs:
           path: internal
 
       # A release may ask a newer Go than this module does.
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: stable
 
